@@ -5,12 +5,13 @@
 // and link the official LiveGraph and SuperNova implementations.
 // int main() { return LiveGraphVsSuperNova::Run(); }
 //
-// Each H/V logical edge uses two physical LiveGraph edges with distinct labels
-// for parent->child and child->parent. Both directions change in one transaction.
-// TestKit's schedules, barriers, counts, and integrity checks are reused.
-// LiveGraph reads use fresh snapshots; Fabric reads use its public Find* API.
-// Test 1's "atomic" payload row means a snapshot property read for LiveGraph.
-// LiveGraph rollback retries and Fabric validation retries are distinct metrics.
+// Each H/V logical edge uses two physical LiveGraph edges. Forward labels group
+// child traversal; reverse labels encode the parent ordinal so FindParent is a
+// direct labelled lookup rather than an adapter-induced O(K) scan. Both physical
+// directions change in one transaction. TestKit schedules/barriers/counts remain
+// unchanged. Test 1 bulk scans retain one native LiveGraph snapshot/iterator per
+// scan round; Tests 2-3 retain one transaction per logical mutation/stable read.
+// LiveGraph rollback retries and Fabric validation retries remain separate metrics.
 
 #include <stdexcept>
 #include <string>
@@ -49,6 +50,7 @@ public:
             return false;
         try
         {
+            Fatal_.store(false, std::memory_order_release);
             Graph_ = std::make_unique<lg::Graph>("", "", 1ull << 40,
                                                    static_cast<lg::vertex_t>(nodes + 1));
             auto tx = Graph_->begin_transaction();
@@ -58,10 +60,33 @@ public:
             NodeCount_ = nodes;
             Words_ = words;
             K_ = k;
-            Staging_.assign(words, 0);
-            StageNode_ = StageWord_ = 0;
+            Staging_.assign(words, 0u);
+            StageNode_ = StageWord_ = 0u;
             return true;
         }
+        catch (const std::exception&) { Fatal_.store(true); return false; }
+    }
+
+    // Tests 2-3 are structural tests. SuperNova still owns a minimal payload
+    // region because its runtime schema requires a region; give LiveGraph the
+    // same logical one-word vertex property so neither side is an empty-shell
+    // graph during the structural measurements. This setup is outside timing.
+    bool PrimePayloadStorage() noexcept
+    {
+        if (!Graph_ || Words_ == 0u || Fatal_.load()) return false;
+        try
+        {
+            std::vector<std::uint64_t> zeros(Words_, 0u);
+            const std::string_view payload(
+                reinterpret_cast<const char*>(zeros.data()),
+                zeros.size() * sizeof(std::uint64_t));
+            auto tx = Graph_->begin_transaction();
+            for (std::size_t node = 0u; node < NodeCount_; ++node)
+                tx.put_vertex(static_cast<lg::vertex_t>(node), payload);
+            tx.commit();
+            return true;
+        }
+        catch (const lg::Transaction::RollbackExcept&) { return false; }
         catch (const std::exception&) { Fatal_.store(true); return false; }
     }
 
@@ -73,23 +98,42 @@ public:
         try
         {
             auto tx = Graph_->begin_transaction();
-            std::array<bool, 64> occupied{};
-            auto edges = tx.get_edges(child, Back(axis));
-            for (; edges.valid(); edges.next())
+
+            // One logical parent relation per (axis,parent,child).
+            if (!tx.get_edge(parent, Front(axis), child).empty()) return false;
+
+            std::optional<unsigned> free_ordinal{};
+            for (unsigned ordinal = 0u; ordinal < K_; ++ordinal)
             {
+                auto edges = tx.get_edges(child, Back(axis, ordinal));
+                if (!edges.valid())
+                {
+                    free_ordinal = ordinal;
+                    break;
+                }
+
                 const auto data = edges.edge_data();
-                const auto ord = data.empty() ? 0u :
-                    static_cast<unsigned char>(data[0]);
-                if (edges.dst_id() == parent || data.size() != 1 ||
-                    ord == 0 || ord > K_) return false;
-                occupied[ord - 1] = true;
+                const auto existing_parent = static_cast<std::size_t>(edges.dst_id());
+                if (!EdgeDataMatchesOrdinal(data, ordinal) ||
+                    !Legal(existing_parent, child))
+                {
+                    Fatal_.store(true);
+                    return false;
+                }
+                edges.next();
+                if (edges.valid())
+                {
+                    // A reverse ordinal label is intentionally one-to-one.
+                    Fatal_.store(true);
+                    return false;
+                }
             }
-            auto free = std::find(occupied.begin(), occupied.begin() + K_, false);
-            if (free == occupied.begin() + K_) return false;
-            const char ordinal = static_cast<char>(free - occupied.begin() + 1);
-            const std::string_view data(&ordinal, 1);
+            if (!free_ordinal.has_value()) return false;
+
+            const char encoded = static_cast<char>(free_ordinal.value() + 1u);
+            const std::string_view data(&encoded, 1u);
             tx.put_edge(parent, Front(axis), child, data);
-            tx.put_edge(child, Back(axis), parent, data);
+            tx.put_edge(child, Back(axis, free_ordinal.value()), parent, data);
             tx.commit();
             return true;
         }
@@ -107,18 +151,32 @@ public:
         try
         {
             auto tx = Graph_->begin_transaction();
-            const auto old = tx.get_edge(child, Back(axis), old_parent);
             const auto forward = tx.get_edge(old_parent, Front(axis), child);
-            if (old.size() != 1 || forward != old ||
-                !tx.get_edge(child, Back(axis), new_parent).empty())
-            { Fatal_.store(true); return false; }
-            const char ordinal = old[0];
-            const std::string_view data(&ordinal, 1);
-            if (!tx.del_edge(child, Back(axis), old_parent) ||
-                !tx.del_edge(old_parent, Front(axis), child))
-            { Fatal_.store(true); return false; }
-            tx.put_edge(new_parent, Front(axis), child, data);
-            tx.put_edge(child, Back(axis), new_parent, data);
+            unsigned ordinal = 0u;
+            if (!DecodeOrdinal(forward, ordinal))
+            {
+                Fatal_.store(true);
+                return false;
+            }
+
+            const auto reverse = tx.get_edge(
+                child, Back(axis, ordinal), old_parent);
+            if (reverse != forward ||
+                !tx.get_edge(new_parent, Front(axis), child).empty())
+            {
+                Fatal_.store(true);
+                return false;
+            }
+
+            if (!tx.del_edge(old_parent, Front(axis), child) ||
+                !tx.del_edge(child, Back(axis, ordinal), old_parent))
+            {
+                Fatal_.store(true);
+                return false;
+            }
+
+            tx.put_edge(new_parent, Front(axis), child, forward);
+            tx.put_edge(child, Back(axis, ordinal), new_parent, forward);
             tx.commit();
             return true;
         }
@@ -127,43 +185,37 @@ public:
     }
 
     ReadResult FindParent(std::size_t child, Axis axis, std::uint8_t ordinal,
-                          std::uint32_t tries = 1) noexcept
+                          std::uint32_t tries = 1u) noexcept
     {
         (void)tries;
         if (child >= NodeCount_ || ordinal >= K_ || Fatal_.load()) return {};
         try
         {
             auto tx = Graph_->begin_read_only_transaction();
-            auto edges = tx.get_edges(child, Back(axis));
-            for (; edges.valid(); edges.next())
-            {
-                const auto data = edges.edge_data();
-                if (data.size() != 1) { Fatal_.store(true); return {}; }
-                if (static_cast<unsigned char>(data[0]) == ordinal + 1u)
-                    return Found(static_cast<std::size_t>(edges.dst_id()),
-                                 Locator(child, ordinal));
-            }
-            return {};
+            return ParentRead(tx, child, axis, ordinal);
         }
         catch (const std::exception&) { Fatal_.store(true); return {}; }
     }
 
     ReadResult StableFindParent(std::size_t child, Axis axis,
                                 std::uint8_t ordinal,
-                                std::uint32_t tries = 1) noexcept
-    { return FindParent(child, axis, ordinal, tries); }
+                                std::uint32_t tries = 1u) noexcept
+    {
+        // Intentionally a fresh MVCC snapshot for every Test-3 logical read.
+        return FindParent(child, axis, ordinal, tries);
+    }
 
     ReadResult FindFirstChild(std::size_t parent, Axis axis,
-                              std::uint32_t tries = 1) noexcept
-    { return ChildRead(parent, axis, ChildOp::First, 0, tries); }
+                              std::uint32_t tries = 1u) noexcept
+    { return ChildRead(parent, axis, ChildOp::First, 0u, tries); }
     ReadResult FindLastChild(std::size_t parent, Axis axis,
-                             std::uint32_t tries = 1) noexcept
-    { return ChildRead(parent, axis, ChildOp::Last, 0, tries); }
+                             std::uint32_t tries = 1u) noexcept
+    { return ChildRead(parent, axis, ChildOp::Last, 0u, tries); }
     ReadResult FindNextChild(std::size_t parent, Axis axis, std::uint32_t locator,
-                             std::uint32_t tries = 1) noexcept
+                             std::uint32_t tries = 1u) noexcept
     { return ChildRead(parent, axis, ChildOp::Next, locator, tries); }
     ReadResult FindPreviousChild(std::size_t parent, Axis axis, std::uint32_t locator,
-                                 std::uint32_t tries = 1) noexcept
+                                 std::uint32_t tries = 1u) noexcept
     { return ChildRead(parent, axis, ChildOp::Previous, locator, tries); }
 
     bool StorePayload(std::size_t node, std::uint32_t word,
@@ -184,9 +236,10 @@ public:
                 Staging_.size() * sizeof(std::uint64_t)));
             tx.commit();
             ++StageNode_;
-            StageWord_ = 0;
+            StageWord_ = 0u;
             return true;
         }
+        catch (const lg::Transaction::RollbackExcept&) { return false; }
         catch (const std::exception&) { Fatal_.store(true); return false; }
     }
 
@@ -198,9 +251,207 @@ public:
         try
         {
             auto tx = Graph_->begin_read_only_transaction();
-            const auto data = tx.get_vertex(node);
-            if (data.size() != Words_ * sizeof(std::uint64_t)) return false;
-            std::memcpy(&value, data.data() + word * sizeof(value), sizeof(value));
+            return LoadPayloadFromTransaction(tx, node, word, value);
+        }
+        catch (const std::exception&) { Fatal_.store(true); return false; }
+    }
+
+    // Test 1 is explicitly a bulk scan. These methods use one LiveGraph snapshot
+    // per complete scan round and retain the native edge iterator, rather than
+    // charging transaction creation + rescan-from-beginning to every child/word.
+    // Tests 2-3 do NOT use these methods.
+    std::uint64_t BenchmarkParentScan(Axis axis, std::uint32_t rounds) noexcept
+    {
+        std::uint64_t checksum = 0u;
+        if (Fatal_.load()) return checksum;
+        try
+        {
+            for (std::uint32_t r = 0u; r < rounds; ++r)
+            {
+                auto tx = Graph_->begin_read_only_transaction();
+                for (std::size_t child = 0u; child < NodeCount_; ++child)
+                {
+                    for (std::uint8_t ordinal = 0u; ordinal < K_; ++ordinal)
+                    {
+                        const ReadResult read = ParentRead(tx, child, axis, ordinal);
+                        checksum += static_cast<std::uint64_t>(read.Locator) +
+                            static_cast<std::uint64_t>(read.Outcome);
+                    }
+                }
+            }
+        }
+        catch (const std::exception&) { Fatal_.store(true); }
+        return checksum;
+    }
+
+    std::uint64_t BenchmarkReverseScan(
+        Axis axis, bool payload, std::uint32_t rounds) noexcept
+    {
+        std::uint64_t checksum = 0u;
+        if (Fatal_.load()) return checksum;
+        try
+        {
+            for (std::uint32_t r = 0u; r < rounds; ++r)
+            {
+                auto tx = Graph_->begin_read_only_transaction();
+                for (std::size_t parent = 0u; parent < NodeCount_; ++parent)
+                {
+                    auto edges = tx.get_edges(parent, Front(axis));
+                    for (; edges.valid(); edges.next())
+                    {
+                        const auto data = edges.edge_data();
+                        const std::size_t child = static_cast<std::size_t>(edges.dst_id());
+                        unsigned ordinal = 0u;
+                        if (!DecodeOrdinal(data, ordinal) || !Legal(parent, child))
+                        {
+                            Fatal_.store(true);
+                            return checksum ^ UINT64_MAX;
+                        }
+
+                        checksum += Locator(child, ordinal);
+                        if (payload)
+                        {
+                            const std::uint32_t word = static_cast<std::uint32_t>(
+                                child % Words_);
+                            std::uint64_t value = 0u;
+                            if (!LoadPayloadFromTransaction(tx, child, word, value))
+                            {
+                                Fatal_.store(true);
+                                return checksum ^ UINT64_MAX;
+                            }
+                            checksum ^= value;
+                        }
+                    }
+                    // Match the generic First/Next traversal's terminal NONE.
+                    checksum += static_cast<std::uint64_t>(ReadOperation::NONE);
+                }
+            }
+        }
+        catch (const std::exception&) { Fatal_.store(true); }
+        return checksum;
+    }
+
+    std::uint64_t BenchmarkPayloadScan(bool atomic, std::uint32_t rounds) noexcept
+    {
+        (void)atomic; // LiveGraph property reads are snapshot reads in both rows.
+        std::uint64_t checksum = 0u;
+        if (Fatal_.load()) return checksum;
+        try
+        {
+            for (std::uint32_t r = 0u; r < rounds; ++r)
+            {
+                auto tx = Graph_->begin_read_only_transaction();
+                for (std::size_t node = 0u; node < NodeCount_; ++node)
+                {
+                    const auto data = tx.get_vertex(node);
+                    if (data.size() != Words_ * sizeof(std::uint64_t))
+                    {
+                        Fatal_.store(true);
+                        return checksum ^ UINT64_MAX;
+                    }
+                    for (std::uint32_t word = 0u; word < Words_; ++word)
+                    {
+                        std::uint64_t value = 0u;
+                        std::memcpy(
+                            &value,
+                            data.data() + static_cast<std::size_t>(word) * sizeof(value),
+                            sizeof(value));
+                        checksum += value;
+                    }
+                }
+            }
+        }
+        catch (const std::exception&) { Fatal_.store(true); }
+        return checksum;
+    }
+
+    bool VerifyPayloadPattern() noexcept
+    {
+        if (Fatal_.load()) return false;
+        try
+        {
+            auto tx = Graph_->begin_read_only_transaction();
+            for (std::size_t node = 0u; node < NodeCount_; ++node)
+            {
+                const auto data = tx.get_vertex(node);
+                if (data.size() != Words_ * sizeof(std::uint64_t)) return false;
+                for (std::uint32_t word = 0u; word < Words_; ++word)
+                {
+                    std::uint64_t value = 0u;
+                    std::memcpy(
+                        &value,
+                        data.data() + static_cast<std::size_t>(word) * sizeof(value),
+                        sizeof(value));
+                    const std::uint64_t expected =
+                        (static_cast<std::uint64_t>(node + 1u) << 32u) ^
+                        static_cast<std::uint64_t>(word + 1u);
+                    if (value != expected) return false;
+                }
+            }
+            return true;
+        }
+        catch (const std::exception&) { Fatal_.store(true); return false; }
+    }
+
+    // Fast quiescent Test-1 proof using LiveGraph's native snapshot/iterators.
+    // It verifies the same exact expected H/V topology produced by
+    // BuildFullTest1Graph, including both physical directions and ordinals.
+    bool VerifyFullTest1Graph(const BenchmarkCase& config) noexcept
+    {
+        if (config.NodeCount != NodeCount_ ||
+            config.ParentCapacity != K_ || Fatal_.load()) return false;
+        try
+        {
+            auto tx = Graph_->begin_read_only_transaction();
+            for (const Axis axis : {Axis::HORIZONTAL, Axis::VERTICAL})
+            {
+                std::uint64_t forward_count = 0u;
+                for (std::size_t child = 0u; child < NodeCount_; ++child)
+                {
+                    const std::size_t count = std::min<std::size_t>(K_, child);
+                    for (std::uint8_t ordinal = 0u; ordinal < K_; ++ordinal)
+                    {
+                        auto reverse = tx.get_edges(child, Back(axis, ordinal));
+                        if (ordinal >= count)
+                        {
+                            if (reverse.valid()) return false;
+                            continue;
+                        }
+
+                        const std::size_t expected_parent = axis == Axis::HORIZONTAL
+                            ? child - 1u - ordinal
+                            : static_cast<std::size_t>(ordinal);
+                        if (!reverse.valid() ||
+                            static_cast<std::size_t>(reverse.dst_id()) != expected_parent ||
+                            !EdgeDataMatchesOrdinal(reverse.edge_data(), ordinal))
+                            return false;
+                        reverse.next();
+                        if (reverse.valid()) return false;
+
+                        const auto forward = tx.get_edge(
+                            expected_parent, Front(axis), child);
+                        if (!EdgeDataMatchesOrdinal(forward, ordinal)) return false;
+                    }
+                }
+
+                for (std::size_t parent = 0u; parent < NodeCount_; ++parent)
+                {
+                    auto edges = tx.get_edges(parent, Front(axis));
+                    for (; edges.valid(); edges.next())
+                    {
+                        const std::size_t child = static_cast<std::size_t>(edges.dst_id());
+                        unsigned ordinal = 0u;
+                        if (!DecodeOrdinal(edges.edge_data(), ordinal) ||
+                            !Legal(parent, child)) return false;
+                        const std::size_t expected_parent = axis == Axis::HORIZONTAL
+                            ? child - 1u - ordinal
+                            : ordinal;
+                        if (expected_parent != parent) return false;
+                        ++forward_count;
+                    }
+                }
+                if (forward_count != EdgeCountPerAxis(NodeCount_, K_)) return false;
+            }
             return true;
         }
         catch (const std::exception&) { Fatal_.store(true); return false; }
@@ -210,16 +461,84 @@ public:
 
 private:
     enum class ChildOp { First, Last, Next, Previous };
-    static constexpr lg::label_t Front(Axis a) noexcept
-    { return a == Axis::HORIZONTAL ? 1 : 3; }
-    static constexpr lg::label_t Back(Axis a) noexcept
-    { return a == Axis::HORIZONTAL ? 2 : 4; }
+
+    static constexpr lg::label_t H_FRONT = 1u;
+    static constexpr lg::label_t V_FRONT = 2u;
+    static constexpr lg::label_t H_BACK_BASE = 0x0100u;
+    static constexpr lg::label_t V_BACK_BASE = 0x0200u;
+
+    static constexpr lg::label_t Front(Axis axis) noexcept
+    { return axis == Axis::HORIZONTAL ? H_FRONT : V_FRONT; }
+
+    static constexpr lg::label_t Back(Axis axis, unsigned ordinal) noexcept
+    {
+        return static_cast<lg::label_t>(
+            (axis == Axis::HORIZONTAL ? H_BACK_BASE : V_BACK_BASE) + ordinal);
+    }
+
     bool Legal(std::size_t parent, std::size_t child) const noexcept
     { return parent < child && child < NodeCount_; }
+
     std::uint32_t Locator(std::size_t child, unsigned ordinal) const noexcept
     { return static_cast<std::uint32_t>(child * K_ + ordinal); }
+
     static ReadResult Found(std::size_t node, std::uint32_t locator) noexcept
     { return {node, locator, ReadOperation::FOUND, true}; }
+
+    bool DecodeOrdinal(std::string_view data, unsigned& ordinal) const noexcept
+    {
+        if (data.size() != 1u) return false;
+        const unsigned encoded = static_cast<unsigned char>(data[0]);
+        if (encoded == 0u || encoded > K_) return false;
+        ordinal = encoded - 1u;
+        return true;
+    }
+
+    bool EdgeDataMatchesOrdinal(std::string_view data, unsigned ordinal) const noexcept
+    {
+        unsigned decoded = 0u;
+        return DecodeOrdinal(data, decoded) && decoded == ordinal;
+    }
+
+    ReadResult ParentRead(
+        lg::Transaction& tx,
+        std::size_t child,
+        Axis axis,
+        std::uint8_t ordinal)
+    {
+        auto edges = tx.get_edges(child, Back(axis, ordinal));
+        if (!edges.valid()) return {};
+
+        const std::size_t parent = static_cast<std::size_t>(edges.dst_id());
+        if (!EdgeDataMatchesOrdinal(edges.edge_data(), ordinal) ||
+            !Legal(parent, child))
+        {
+            Fatal_.store(true);
+            return {};
+        }
+        edges.next();
+        if (edges.valid())
+        {
+            Fatal_.store(true);
+            return {};
+        }
+        return Found(parent, Locator(child, ordinal));
+    }
+
+    bool LoadPayloadFromTransaction(
+        lg::Transaction& tx,
+        std::size_t node,
+        std::uint32_t word,
+        std::uint64_t& value)
+    {
+        const auto data = tx.get_vertex(node);
+        if (data.size() != Words_ * sizeof(std::uint64_t)) return false;
+        std::memcpy(
+            &value,
+            data.data() + static_cast<std::size_t>(word) * sizeof(value),
+            sizeof(value));
+        return true;
+    }
 
     ReadResult ChildRead(std::size_t parent, Axis axis, ChildOp op,
                          std::uint32_t cursor, std::uint32_t tries) noexcept
@@ -229,20 +548,21 @@ private:
         try
         {
             auto tx = Graph_->begin_read_only_transaction();
-            // LiveGraph's reverse flag reverses iterator order, not edge direction.
+            // reverse=true reverses iterator order; it does not reverse the edge.
             const bool reverse = op == ChildOp::Last || op == ChildOp::Previous;
             auto edges = tx.get_edges(parent, Front(axis), reverse);
             bool after = op == ChildOp::First || op == ChildOp::Last;
             for (; edges.valid(); edges.next())
             {
                 const auto data = edges.edge_data();
-                const auto child = static_cast<std::size_t>(edges.dst_id());
-                const auto ord = data.empty() ? 0u :
-                    static_cast<unsigned char>(data[0]);
-                if (data.size() != 1 || child >= NodeCount_ ||
-                    ord == 0 || ord > K_)
-                { Fatal_.store(true); return {}; }
-                const auto loc = Locator(child, ord - 1u);
+                const std::size_t child = static_cast<std::size_t>(edges.dst_id());
+                unsigned ordinal = 0u;
+                if (!DecodeOrdinal(data, ordinal) || !Legal(parent, child))
+                {
+                    Fatal_.store(true);
+                    return {};
+                }
+                const auto loc = Locator(child, ordinal);
                 if (after) return Found(child, loc);
                 if (loc == cursor) after = true;
             }
@@ -251,13 +571,92 @@ private:
         catch (const std::exception&) { Fatal_.store(true); return {}; }
     }
 
-    std::unique_ptr<lg::Graph> Graph_;
-    std::size_t NodeCount_ = 0, Words_ = 0;
-    std::uint8_t K_ = 0;
-    std::vector<std::uint64_t> Staging_;
-    std::size_t StageNode_ = 0, StageWord_ = 0;
+    std::unique_ptr<lg::Graph> Graph_{};
+    std::size_t NodeCount_ = 0u, Words_ = 0u;
+    std::uint8_t K_ = 0u;
+    std::vector<std::uint64_t> Staging_{};
+    std::size_t StageNode_ = 0u, StageWord_ = 0u;
     std::atomic<bool> Fatal_{false};
 };
+
+inline void StageBegin(std::size_t stage, std::size_t total, const char* label)
+{
+    std::cout << "    [stage " << stage << '/' << total << "] "
+              << label << "..." << std::flush;
+}
+
+inline void StageEnd(bool ok = true)
+{
+    std::cout << (ok ? " done\n" : " FAIL\n");
+}
+
+inline void SweepSampleProgress(
+    const char* kind,
+    std::size_t current,
+    std::size_t total,
+    std::size_t sample,
+    std::size_t sample_total)
+{
+    if (sample == 0u)
+    {
+        std::cout << "    [" << kind << ' ' << current << '/' << total
+                  << "] samples" << std::flush;
+    }
+    std::cout << ' ' << (sample + 1u) << '/' << sample_total << std::flush;
+}
+
+inline void SweepSampleDone()
+{
+    std::cout << " done\n";
+}
+
+template <typename Backend>
+bool InitializeStructuralBackend(Backend& backend, const BenchmarkCase& config)
+{
+    // Tests 2-3 measure only topology/concurrency. Keep one minimal 64-bit
+    // logical payload word rather than letting unused payload regions distort
+    // cache footprint differently between the two storage engines.
+    constexpr std::size_t STRUCTURAL_PAYLOAD_WORDS = 1u;
+    if (!InitializeBackend(
+        backend, config, STRUCTURAL_PAYLOAD_WORDS, true)) return false;
+
+    if constexpr (requires { backend.PrimePayloadStorage(); })
+        return backend.PrimePayloadStorage();
+    return true;
+}
+
+template <typename Backend>
+bool BuildMutationBackendFair(
+    Backend& backend,
+    const MutationScenario& scenario,
+    std::size_t writer_count)
+{
+    if (writer_count == 0u || writer_count > scenario.MaxWriters ||
+        !InitializeStructuralBackend(backend, scenario.Config)) return false;
+
+    for (std::size_t writer = 0u; writer < writer_count; ++writer)
+    {
+        const std::size_t child = scenario.Child(writer);
+        if (!backend.AddParent(
+                scenario.InitialH(writer), child, Axis::HORIZONTAL) ||
+            !backend.AddParent(
+                scenario.InitialV(writer), child, Axis::VERTICAL))
+            return false;
+    }
+    return true;
+}
+
+template <typename Backend>
+bool BuildReaderBackendFair(Backend& backend, const ReaderScenario& scenario)
+{
+    if (!InitializeStructuralBackend(backend, scenario.Config)) return false;
+    for (const WriterSpec& writer : scenario.Writers)
+    {
+        if (!backend.AddParent(
+            writer.InitialParent, writer.Child, writer.RelationAxis)) return false;
+    }
+    return true;
+}
 
 struct ComparisonTiming { double LiveGraph = 0.0, Fabric = 0.0; };
 
@@ -286,6 +685,16 @@ namespace Test01
 {
 using namespace BenchmarkCore;
 
+// TestKit's 100,000 replacement pairs were appropriate for the very cheap
+// in-process baseline, but with a transactional MVCC graph they expand to
+// 800,000 committed write transactions per axis across four measured samples.
+// Keep the same operation count for both backends while bounding each measured
+// sample to a long-enough, publication-useful interval. This is intentionally
+// local to the external comparison and does not alter TestKit.
+constexpr std::uint32_t TEST1_REPLACE_PAIRS_PER_SAMPLE = 5'000u;
+constexpr std::uint64_t TEST1_REPLACE_OPS_PER_SAMPLE =
+    static_cast<std::uint64_t>(TEST1_REPLACE_PAIRS_PER_SAMPLE) * 2u;
+
 template <class Backend>
 bool VerifyPayload(Backend& backend, const BenchmarkCase& config)
 {
@@ -304,12 +713,22 @@ bool VerifyPayload(Backend& backend, const BenchmarkCase& config)
 
 inline bool RunScenario(const BenchmarkCase& config, std::size_t case_index)
 {
+    constexpr std::size_t STAGE_COUNT = 13u;
     std::cout
         << "\n  CASE " << case_index << "/4"
         << "  N=" << config.NodeCount
         << "  K=" << static_cast<unsigned>(config.ParentCapacity) << '\n';
 
+    const std::uint64_t edge_count = EdgeCountPerAxis(
+        config.NodeCount, config.ParentCapacity);
+    const std::uint64_t parent_calls =
+        config.NodeCount * static_cast<std::uint64_t>(config.ParentCapacity);
+    const std::uint64_t reverse_calls = edge_count + config.NodeCount;
+    const std::uint64_t payload_calls =
+        config.NodeCount * TEST1_PAYLOAD_WORDS;
+
     bool construction_ok = true;
+    StageBegin(1u, STAGE_COUNT, "measured incremental construction");
     const auto construction = MeasureComparison(
         [&]()
         {
@@ -331,32 +750,33 @@ inline bool RunScenario(const BenchmarkCase& config, std::size_t case_index)
                 return ok ? backend.ApproxStorageBytes() : 0u;
             });
         });
+    StageEnd(construction_ok);
+    if (!construction_ok) return false;
+    PrintComparisonRow("construction", construction);
 
+    StageBegin(2u, STAGE_COUNT, "persistent graph build");
     LiveGraphBackend live_backend{};
     RuntimeAPCFabricBackend fabric_backend{};
-    if (
-        !construction_ok ||
-        !BuildFullTest1Graph(live_backend, config) ||
-        !BuildFullTest1Graph(fabric_backend, config)
-    )
-    {
-        std::cout << "    build: FAIL\n";
-        return false;
-    }
+    const bool persistent_build =
+        BuildFullTest1Graph(live_backend, config) &&
+        BuildFullTest1Graph(fabric_backend, config);
+    StageEnd(persistent_build);
+    if (!persistent_build) return false;
 
-    const GraphProof live_proof = ProveRuntimeCombinedDAG(live_backend, config);
+    std::cout << "    edges/axis=" << edge_count
+              << "  payload/node=" << TEST1_PAYLOAD_WORDS * sizeof(std::uint64_t)
+              << " B  Fabric slab=" << fabric_backend.ApproxStorageBytes()
+              << " B (LiveGraph allocation not comparable to slab bytes)\n";
+
+    StageBegin(3u, STAGE_COUNT, "pre-benchmark topology + payload verification");
+    const bool live_proof = live_backend.VerifyFullTest1Graph(config);
     const GraphProof fabric_proof = ProveRuntimeCombinedDAG(fabric_backend, config);
-    bool ok = live_proof.Passed() && fabric_proof.Passed() &&
-        VerifyPayload(live_backend, config) &&
-        VerifyPayload(fabric_backend, config) && live_backend.Healthy();
-
-    const std::uint64_t edge_count = EdgeCountPerAxis(
-        config.NodeCount, config.ParentCapacity);
-    const std::uint64_t parent_calls =
-        config.NodeCount * static_cast<std::uint64_t>(config.ParentCapacity);
-    const std::uint64_t reverse_calls = edge_count + config.NodeCount;
-    const std::uint64_t payload_calls =
-        config.NodeCount * TEST1_PAYLOAD_WORDS;
+    const bool payload_ok = live_backend.VerifyPayloadPattern() &&
+        VerifyPayload(fabric_backend, config);
+    bool ok = live_proof && fabric_proof.Passed() && payload_ok &&
+        live_backend.Healthy();
+    StageEnd(ok);
+    if (!ok) return false;
 
     auto parent_scan = [&](auto& backend, Axis axis)
     {
@@ -364,16 +784,25 @@ inline bool RunScenario(const BenchmarkCase& config, std::size_t case_index)
             TARGET_TRAVERSAL_CALLS, parent_calls);
         return MeasureNsPerOperation(parent_calls * rounds, [&]()
         {
-            std::uint64_t checksum = 0u;
-            for (std::uint32_t r = 0u; r < rounds; ++r)
-                for (std::size_t child = 0u; child < config.NodeCount; ++child)
-                    for (std::uint8_t ordinal = 0u; ordinal < config.ParentCapacity; ++ordinal)
-                    {
-                        const BenchmarkReadResult read = BenchmarkFindParentCall(
-                            backend, child, axis, ordinal, 1u);
-                        checksum += read.Locator + static_cast<std::uint64_t>(read.Outcome);
-                    }
-            return checksum;
+            if constexpr (requires { backend.BenchmarkParentScan(axis, rounds); })
+            {
+                return backend.BenchmarkParentScan(axis, rounds);
+            }
+            else
+            {
+                std::uint64_t checksum = 0u;
+                for (std::uint32_t r = 0u; r < rounds; ++r)
+                    for (std::size_t child = 0u; child < config.NodeCount; ++child)
+                        for (std::uint8_t ordinal = 0u;
+                             ordinal < config.ParentCapacity; ++ordinal)
+                        {
+                            const BenchmarkReadResult read = BenchmarkFindParentCall(
+                                backend, child, axis, ordinal, 1u);
+                            checksum += read.Locator +
+                                static_cast<std::uint64_t>(read.Outcome);
+                        }
+                return checksum;
+            }
         });
     };
 
@@ -384,32 +813,42 @@ inline bool RunScenario(const BenchmarkCase& config, std::size_t case_index)
             reverse_calls);
         return MeasureNsPerOperation(reverse_calls * rounds, [&]()
         {
-            std::uint64_t checksum = 0u;
-            for (std::uint32_t r = 0u; r < rounds; ++r)
+            if constexpr (requires {
+                backend.BenchmarkReverseScan(axis, payload, rounds);
+            })
             {
-                for (std::size_t parent = 0u; parent < config.NodeCount; ++parent)
-                {
-                    BenchmarkReadResult read = BenchmarkFindFirstChildCall(
-                        backend, parent, axis, 1u);
-                    while (read.IsFound())
-                    {
-                        checksum += read.Locator;
-                        if (payload && read.HasNodeHint())
-                        {
-                            std::uint64_t value = 0u;
-                            const std::uint32_t word = static_cast<std::uint32_t>(
-                                read.NodeHint % TEST1_PAYLOAD_WORDS);
-                            if (!backend.LoadPayload(read.NodeHint, word, value, false))
-                                checksum ^= UINT64_MAX;
-                            checksum ^= value;
-                        }
-                        read = BenchmarkFindNextChildCall(
-                            backend, parent, axis, read.Locator, 1u);
-                    }
-                    checksum += static_cast<std::uint64_t>(read.Outcome);
-                }
+                return backend.BenchmarkReverseScan(axis, payload, rounds);
             }
-            return checksum;
+            else
+            {
+                std::uint64_t checksum = 0u;
+                for (std::uint32_t r = 0u; r < rounds; ++r)
+                {
+                    for (std::size_t parent = 0u; parent < config.NodeCount; ++parent)
+                    {
+                        BenchmarkReadResult read = BenchmarkFindFirstChildCall(
+                            backend, parent, axis, 1u);
+                        while (read.IsFound())
+                        {
+                            checksum += read.Locator;
+                            if (payload && read.HasNodeHint())
+                            {
+                                std::uint64_t value = 0u;
+                                const std::uint32_t word = static_cast<std::uint32_t>(
+                                    read.NodeHint % TEST1_PAYLOAD_WORDS);
+                                if (!backend.LoadPayload(
+                                    read.NodeHint, word, value, false))
+                                    checksum ^= UINT64_MAX;
+                                checksum ^= value;
+                            }
+                            read = BenchmarkFindNextChildCall(
+                                backend, parent, axis, read.Locator, 1u);
+                        }
+                        checksum += static_cast<std::uint64_t>(read.Outcome);
+                    }
+                }
+                return checksum;
+            }
         });
     };
 
@@ -419,40 +858,55 @@ inline bool RunScenario(const BenchmarkCase& config, std::size_t case_index)
             TARGET_PAYLOAD_CALLS, payload_calls);
         return MeasureNsPerOperation(payload_calls * rounds, [&]()
         {
-            std::uint64_t checksum = 0u;
-            for (std::uint32_t r = 0u; r < rounds; ++r)
-                for (std::size_t node = 0u; node < config.NodeCount; ++node)
-                    for (std::uint32_t word = 0u; word < TEST1_PAYLOAD_WORDS; ++word)
-                    {
-                        std::uint64_t value = 0u;
-                        if (!backend.LoadPayload(node, word, value, atomic))
-                            checksum ^= UINT64_MAX;
-                        checksum += value;
-                    }
-            return checksum;
+            if constexpr (requires { backend.BenchmarkPayloadScan(atomic, rounds); })
+            {
+                return backend.BenchmarkPayloadScan(atomic, rounds);
+            }
+            else
+            {
+                std::uint64_t checksum = 0u;
+                for (std::uint32_t r = 0u; r < rounds; ++r)
+                    for (std::size_t node = 0u; node < config.NodeCount; ++node)
+                        for (std::uint32_t word = 0u;
+                             word < TEST1_PAYLOAD_WORDS; ++word)
+                        {
+                            std::uint64_t value = 0u;
+                            if (!backend.LoadPayload(node, word, value, atomic))
+                                checksum ^= UINT64_MAX;
+                            checksum += value;
+                        }
+                return checksum;
+            }
         });
     };
 
     bool all_replacements_succeeded = true;
     auto replace_scan = [&](auto& backend, Axis axis)
     {
-        const std::size_t child = static_cast<std::size_t>(config.ParentCapacity) + 1u;
-        const std::size_t old_parent = axis == Axis::HORIZONTAL ? child - 1u : 0u;
+        const std::size_t child =
+            static_cast<std::size_t>(config.ParentCapacity) + 1u;
+        const std::size_t old_parent =
+            axis == Axis::HORIZONTAL ? child - 1u : 0u;
         const std::size_t alternate = axis == Axis::HORIZONTAL
             ? child - static_cast<std::size_t>(config.ParentCapacity) - 1u
             : static_cast<std::size_t>(config.ParentCapacity);
 
         return MeasureNsPerOperation(
-            static_cast<std::uint64_t>(TEST1_MUTATION_ROUNDS) * 2u,
+            TEST1_REPLACE_OPS_PER_SAMPLE,
             [&]()
             {
                 std::uint64_t checksum = 0u;
-                for (std::uint32_t r = 0u; r < TEST1_MUTATION_ROUNDS; ++r)
+                for (std::uint32_t r = 0u;
+                     r < TEST1_REPLACE_PAIRS_PER_SAMPLE; ++r)
                 {
+                    // Test 1 is single-threaded: one attempt per logical
+                    // replacement gives both backends identical semantics and
+                    // avoids charging SuperNova's internal retry budget against
+                    // LiveGraph, whose adapter deliberately performs one txn.
                     const bool a = backend.ReplaceParent(
-                        old_parent, alternate, child, axis, DEFAULT_MAX_TRIES);
+                        old_parent, alternate, child, axis, 1u);
                     const bool b = backend.ReplaceParent(
-                        alternate, old_parent, child, axis, DEFAULT_MAX_TRIES);
+                        alternate, old_parent, child, axis, 1u);
                     all_replacements_succeeded =
                         all_replacements_succeeded && a && b;
                     checksum += static_cast<std::uint64_t>(a) +
@@ -462,55 +916,80 @@ inline bool RunScenario(const BenchmarkCase& config, std::size_t case_index)
             });
     };
 
+    StageBegin(4u, STAGE_COUNT, "H parent lookup bulk scan");
     const ComparisonTiming h_parent = MeasureComparison(
         [&] { return parent_scan(live_backend, Axis::HORIZONTAL); },
         [&] { return parent_scan(fabric_backend, Axis::HORIZONTAL); });
+    StageEnd(live_backend.Healthy());
+    PrintComparisonRow("H parent scan", h_parent);
+
+    StageBegin(5u, STAGE_COUNT, "V parent lookup bulk scan");
     const ComparisonTiming v_parent = MeasureComparison(
         [&] { return parent_scan(live_backend, Axis::VERTICAL); },
         [&] { return parent_scan(fabric_backend, Axis::VERTICAL); });
+    StageEnd(live_backend.Healthy());
+    PrintComparisonRow("V parent scan", v_parent);
+
+    StageBegin(6u, STAGE_COUNT, "H native reverse-child traversal");
     const ComparisonTiming h_reverse = MeasureComparison(
         [&] { return reverse_scan(live_backend, Axis::HORIZONTAL, false); },
         [&] { return reverse_scan(fabric_backend, Axis::HORIZONTAL, false); });
+    StageEnd(live_backend.Healthy());
+    PrintComparisonRow("H reverse-child scan", h_reverse);
+
+    StageBegin(7u, STAGE_COUNT, "V native reverse-child traversal");
     const ComparisonTiming v_reverse = MeasureComparison(
         [&] { return reverse_scan(live_backend, Axis::VERTICAL, false); },
         [&] { return reverse_scan(fabric_backend, Axis::VERTICAL, false); });
+    StageEnd(live_backend.Healthy());
+    PrintComparisonRow("V reverse-child scan", v_reverse);
+
+    StageBegin(8u, STAGE_COUNT, "sequential payload scan: LiveGraph snapshot vs Fabric direct");
     const ComparisonTiming direct = MeasureComparison(
         [&] { return payload_scan(live_backend, false); },
         [&] { return payload_scan(fabric_backend, false); });
+    StageEnd(live_backend.Healthy());
+    PrintComparisonRow("payload seq snapshot/direct", direct);
+
+    StageBegin(9u, STAGE_COUNT, "sequential payload scan: LiveGraph snapshot vs Fabric atomic");
     const ComparisonTiming atomic = MeasureComparison(
         [&] { return payload_scan(live_backend, true); },
         [&] { return payload_scan(fabric_backend, true); });
+    StageEnd(live_backend.Healthy());
+    PrintComparisonRow("payload seq snapshot/atomic", atomic);
+
+    StageBegin(10u, STAGE_COUNT, "H child traversal + payload");
     const ComparisonTiming graph_payload = MeasureComparison(
         [&] { return reverse_scan(live_backend, Axis::HORIZONTAL, true); },
         [&] { return reverse_scan(fabric_backend, Axis::HORIZONTAL, true); });
+    StageEnd(live_backend.Healthy());
+    PrintComparisonRow("H child + payload", graph_payload);
+
+    std::cout << "    replacement workload="
+              << TEST1_REPLACE_OPS_PER_SAMPLE
+              << " logical replacements/sample x "
+              << ConcurrencyConfig::MEASURED_RUNS << " samples/backend\n";
+
+    StageBegin(11u, STAGE_COUNT, "H atomic parent replacement");
     const ComparisonTiming h_replace = MeasureComparison(
         [&] { return replace_scan(live_backend, Axis::HORIZONTAL); },
         [&] { return replace_scan(fabric_backend, Axis::HORIZONTAL); });
+    StageEnd(all_replacements_succeeded && live_backend.Healthy());
+    PrintComparisonRow("H parent replace", h_replace);
+
+    StageBegin(12u, STAGE_COUNT, "V atomic parent replacement");
     const ComparisonTiming v_replace = MeasureComparison(
         [&] { return replace_scan(live_backend, Axis::VERTICAL); },
         [&] { return replace_scan(fabric_backend, Axis::VERTICAL); });
-
-    std::cout << "    edges/axis=" << edge_count
-              << "  payload/node=" << TEST1_PAYLOAD_WORDS * sizeof(std::uint64_t)
-              << " B  Fabric slab=" << fabric_backend.ApproxStorageBytes()
-              << " B (LiveGraph allocation not comparable to slab bytes)\n";
-
-    PrintComparisonRow("construction", construction);
-    PrintComparisonRow("H parent scan", h_parent);
-    PrintComparisonRow("V parent scan", v_parent);
-    PrintComparisonRow("H reverse-child scan", h_reverse);
-    PrintComparisonRow("V reverse-child scan", v_reverse);
-    PrintComparisonRow("payload direct read", direct);
-    PrintComparisonRow("payload snapshot/atomic read", atomic);
-    PrintComparisonRow("H child + payload", graph_payload);
-    PrintComparisonRow("H parent replace", h_replace);
+    StageEnd(all_replacements_succeeded && live_backend.Healthy());
     PrintComparisonRow("V parent replace", v_replace);
 
-    const GraphProof live_after = ProveRuntimeCombinedDAG(live_backend, config);
+    StageBegin(13u, STAGE_COUNT, "post-mutation topology verification");
+    const bool live_after = live_backend.VerifyFullTest1Graph(config);
     const GraphProof fabric_after = ProveRuntimeCombinedDAG(fabric_backend, config);
-    ok = ok && all_replacements_succeeded &&
-        live_after.Passed() && fabric_after.Passed() &&
-        live_backend.Healthy();
+    ok = ok && all_replacements_succeeded && live_after &&
+        fabric_after.Passed() && live_backend.Healthy();
+    StageEnd(ok);
     std::cout << "    integrity=" << (ok ? "PASS" : "FAIL") << '\n';
     return ok;
 }
@@ -522,7 +1001,8 @@ inline Result Run(const std::array<BenchmarkCase, 4u>& cases)
         << "Official LiveGraph vs single-region SuperNova Fabric.\n"
         << "Each case uses the same N, K, fully populated H/V bounded topology, and\n"
         << "exactly 128 x uint64_t (1024 B) payload per node. Four measured samples\n"
-        << "are taken per row with backend order alternated.\n";
+        << "are taken per row with backend order alternated. LiveGraph bulk read rows\n"
+        << "use a retained read-only snapshot and native iterator for each scan round.\n";
 
     bool ok = true;
     for (std::size_t i = 0u; i < cases.size(); ++i)
@@ -565,13 +1045,17 @@ inline bool RunCase(
 
         for (std::size_t run = 0u; run < ConcurrencyConfig::MEASURED_RUNS; ++run)
         {
+            SweepSampleProgress(
+                "writers", writer_count, max_writers, run,
+                ConcurrencyConfig::MEASURED_RUNS);
             LiveGraphBackend live_backend{};
             RuntimeAPCFabricBackend fabric_backend{};
             if (
-                !BuildMutationBackend(live_backend, scenario, writer_count) ||
-                !BuildMutationBackend(fabric_backend, scenario, writer_count)
+                !BuildMutationBackendFair(live_backend, scenario, writer_count) ||
+                !BuildMutationBackendFair(fabric_backend, scenario, writer_count)
             )
             {
+                std::cout << " SETUP FAIL\n";
                 return false;
             }
 
@@ -608,6 +1092,7 @@ inline bool RunCase(
                 static_cast<double>(fabric_result.Retries) /
                 static_cast<double>(fabric_result.Success);
         }
+        SweepSampleDone();
 
         const double live_median = Median(live_ns);
         const double fabric_median = Median(fabric_ns);
@@ -643,8 +1128,9 @@ inline Result Run(
     Banner("TEST 2A - HOTSPOT STRUCTURAL MUTATION");
     std::cout
         << "Each writer owns one child; all writers contend on the same two H and two V\n"
-        << "parents. LiveGraph commits each replacement as one transaction. Every writer count from\n"
-        << "1 through usable_threads-2 is printed for each of the four (N,K) cases.\n";
+        << "parents. LiveGraph commits each replacement as one transaction. Structural\n"
+        << "tests use one minimal payload word on both backends so unused payload regions\n"
+        << "do not dominate cache footprint. Every writer count 1..usable_threads-2 is measured.\n";
 
     bool hotspot_ok = true;
     for (std::size_t i = 0u; i < cases.size(); ++i)
@@ -656,7 +1142,7 @@ inline Result Run(
     std::cout
         << "Each writer owns one child and follows the same deterministic random schedule\n"
         << "for both backends. The parent pool is min(100, legal predecessor nodes).\n"
-        << "Test 2B now uses the same 1..(usable_threads-2) sweep as Test 2A.\n";
+        << "The same minimal structural payload and 1..(usable_threads-2) sweep are used.\n";
 
     bool distributed_ok = true;
     for (std::size_t i = 0u; i < cases.size(); ++i)
@@ -710,13 +1196,17 @@ inline bool RunCase(
 
         for (std::size_t run = 0u; run < ConcurrencyConfig::MEASURED_RUNS; ++run)
         {
+            SweepSampleProgress(
+                "readers", reader_count, max_readers, run,
+                ConcurrencyConfig::MEASURED_RUNS);
             LiveGraphBackend live_backend{};
             RuntimeAPCFabricBackend fabric_backend{};
             if (
-                !BuildReaderBackend(live_backend, scenario) ||
-                !BuildReaderBackend(fabric_backend, scenario)
+                !BuildReaderBackendFair(live_backend, scenario) ||
+                !BuildReaderBackendFair(fabric_backend, scenario)
             )
             {
+                std::cout << " SETUP FAIL\n";
                 return false;
             }
 
@@ -771,6 +1261,7 @@ inline bool RunCase(
                     fabric_result.ElapsedNs
                 : 0.0;
         }
+        SweepSampleDone();
 
         const double live_median = Median(live_ns);
         const double fabric_median = Median(fabric_ns);
@@ -815,7 +1306,8 @@ inline Result Run(
     std::cout
         << "Exactly two writers remain active: H toggles 0<->1 and V toggles 2<->3\n"
         << "on the same child. Readers sweep 1..(usable_threads-2). Each\n"
-        << "LiveGraph read starts a fresh read-only snapshot transaction.\n";
+        << "LiveGraph stable read starts a fresh read-only snapshot transaction; SuperNova\n"
+        << "uses its public stable FindParent path. Structural payload is kept minimal.\n";
 
     bool hotspot_ok = true;
     for (std::size_t i = 0u; i < cases.size(); ++i)
@@ -826,7 +1318,8 @@ inline Result Run(
     std::cout
         << "Two writers own separate child relations and mutate across up to 100 legal\n"
         << "parents. Readers sweep every count from 1 through usable_threads-2; APC RETRY\n"
-        << "outcomes are retried and never counted as successful stable reads.\n";
+        << "outcomes are retried and never counted as successful stable reads. Structural\n"
+        << "payload remains one logical uint64_t on both backends.\n";
 
     bool distributed_ok = true;
     for (std::size_t i = 0u; i < cases.size(); ++i)
