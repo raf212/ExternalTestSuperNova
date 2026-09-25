@@ -1,0 +1,17 @@
+core/build/
+.vs
+.vscode
+build
+Dump
+.vscode
+/DOCS_USER
+/venv
+/core/pybind11
+/core/out
+/package-lock.json
+/package.json
+/build-release
+*.pdb
+*.ilk
+*.so
+*.pyd
