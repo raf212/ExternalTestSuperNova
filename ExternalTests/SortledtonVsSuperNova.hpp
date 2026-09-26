@@ -27,7 +27,7 @@
 // Sortledton has no relation-label channel matching Fabric's H/V axes in this
 // adapter. H/V and direction are therefore encoded with disjoint vertex-ID
 // ranges. The 1 KiB payload comparison is represented as 128 weighted edges
-// per node in a separate Sortledton graph. This representation difference is
+// per node in the same Sortledton graph. This representation difference is
 // disclosed in Test 1 and must not be described as a native vertex-property
 // comparison.
 //
@@ -36,7 +36,10 @@
 // Test 2: hotspot + distributed mutation; every backend receives the same
 //         wall-clock measurement interval.
 // Test 3: stable reads with two concurrent writers; every backend receives the
-//         same wall-clock measurement interval.
+//         same wall-clock measurement interval. Sortledton additionally uses
+//         a measured per-child adapter guard around reads and replacements.
+//         Test 3 Sortledton numbers are guarded-adapter results, not native
+//         snapshot-only Sortledton throughput.
 //
 // Retry-limit events are reported as progress/contention metrics and do not
 // invalidate an otherwise healthy, integrity-correct sample.
@@ -57,7 +60,9 @@
 #include <iomanip>
 #include <iostream>
 #include <memory>
+#include <mutex>
 #include <optional>
+#include <shared_mutex>
 #include <sstream>
 #include <thread>
 #include <utility>
@@ -70,23 +75,37 @@ using namespace APCDAGTests::BenchmarkCore;
 
 // The repository has no edge labels or vertex properties. H/V and direction are
 // encoded with disjoint vertex ranges; each parent edge stores its ordinal as an
-// eight-byte property. Payload uses a separate weighted graph with 128 edges/node.
+// eight-byte property. Payload uses a disjoint weighted-edge namespace in the same graph (128 edges/node).
 // This encoding is disclosed in the output and is not a native vertex-property row.
 template <bool Bidirectional>
 class SortledtonBackend
 {
 public:
-    bool Initialize(std::size_t nodes, std::size_t words, std::uint8_t k,
-                    bool = false)
+    ~SortledtonBackend() noexcept
     {
-        constexpr std::size_t SORTLEDTON_VERTEX_NAMESPACES = 4u;
+        Cleanup_();
+    }
+
+    bool Initialize(
+        std::size_t nodes,
+        std::size_t words,
+        std::uint8_t k,
+        bool = false)
+    {
         constexpr std::size_t SORTLEDTON_MAX_PAYLOAD_WORDS = 128u;
 
         if (!nodes ||
-            nodes > UINT32_MAX / SORTLEDTON_VERTEX_NAMESPACES ||
-            !words || words > SORTLEDTON_MAX_PAYLOAD_WORDS ||
-            !k || k > ADS::COMPILED_MAX_DIRECT_PARENTS_PER_AXIS)
+            !words ||
+            words > SORTLEDTON_MAX_PAYLOAD_WORDS ||
+            !k ||
+            k > ADS::COMPILED_MAX_DIRECT_PARENTS_PER_AXIS)
+        {
             return false;
+        }
+
+        // One graph represents topology and synthetic payload. The reason for
+        // the earlier crash remains unproven until a debugger provides a stack trace.
+        Cleanup_();
 
         try
         {
@@ -95,26 +114,59 @@ public:
             Words_ = words;
             K_ = k;
 
-            // Thread id 0 is reserved for the benchmark/control thread.
-            // Run() limits usable_thread_count so worker ids remain < 64.
+            const std::size_t topology_namespaces =
+                Bidirectional ? 4u : 2u;
+
+            if (nodes > (UINT32_MAX - words) / (topology_namespaces + 1u))
+            {
+                Cleanup_();
+                return false;
+            }
+
+            TopologyNamespaceCount_ = topology_namespaces;
+            VertexCount_ =
+                (TopologyNamespaceCount_ + 1u) * Nodes_ + Words_;
+
             Manager_ = std::make_unique<TransactionManager>(64u);
             Manager_->register_thread(0u);
-            Topology_ = std::make_unique<VersioningBlockedSkipListAdjacencyList>(
-                128u, sizeof(std::uint64_t), *Manager_);
-            Payload_ = std::make_unique<VersioningBlockedSkipListAdjacencyList>(
-                128u, sizeof(std::uint64_t), *Manager_);
-            if (!CreateVertices(*Topology_, (Bidirectional ? 4u : 2u) * nodes) ||
-                !CreateVertices(*Payload_, nodes + words)) return false;
-            Staging_.assign(words, 0u);
-            StageNode_ = StageWord_ = 0u;
+            ControlThreadRegistered_ = true;
+
+            // Sortledton's constructor prints "Sortledton.3" unconditionally.
+            // Silence only that constructor while preserving benchmark output.
+            struct QuietConstructorOutput
+            {
+                std::ostringstream Discard;
+                std::streambuf* Previous = std::cout.rdbuf(Discard.rdbuf());
+                ~QuietConstructorOutput() { std::cout.rdbuf(Previous); }
+            };
+            {
+                QuietConstructorOutput quiet;
+                Graph_ = std::make_unique<VersioningBlockedSkipListAdjacencyList>(
+                    128u, sizeof(std::uint64_t), *Manager_);
+            }
+
+            if (!CreateVertices_(VertexCount_))
+            {
+                Cleanup_();
+                return false;
+            }
+
+            Staging_.assign(Words_, 0u);
+            StageNode_ = 0u;
+            StageWord_ = 0u;
             return true;
         }
-        catch (...) { Fatal_.store(true); return false; }
+        catch (...)
+        {
+            Fatal_.store(true, std::memory_order_release);
+            Cleanup_();
+            return false;
+        }
     }
 
     bool RegisterThread(std::size_t id) noexcept
     {
-        if (!Manager_ || id >= 64u)
+        if (!Manager_ || id == 0u || id >= 64u)
             return false;
 
         try
@@ -131,7 +183,7 @@ public:
 
     void DeregisterThread(std::size_t id) noexcept
     {
-        if (!Manager_ || id >= 64u)
+        if (!Manager_ || id == 0u || id >= 64u)
             return;
 
         try
@@ -143,452 +195,1101 @@ public:
             Fatal_.store(true, std::memory_order_release);
         }
     }
-    bool Healthy() const noexcept { return !Fatal_.load(); }
+
+    bool Healthy() const noexcept
+    {
+        return !Fatal_.load(std::memory_order_acquire);
+    }
+
+    // Test 3's stable-read adapter: begin the snapshot only after obtaining
+    // the same child's read guard that protects the full replacement commit.
+    // This synchronization is part of the measured Sortledton operation.
+    bool EnableStableReadGuard() noexcept
+    {
+        if (!Ready_()) return false;
+        try
+        {
+            if (!StableReadLocks_)
+                StableReadLocks_ = std::make_unique<std::shared_mutex[]>(Nodes_);
+            return true;
+        }
+        catch (...)
+        {
+            Fatal_.store(true, std::memory_order_release);
+            return false;
+        }
+    }
 
     bool PrimePayloadStorage() noexcept
     {
-        if (!Payload_ || !Manager_) return false;
-        for (std::size_t node = 0; node < Nodes_; ++node)
+        if (!Ready_())
+            return false;
+
+        // Keep each node's 128 payload edges in one transaction.  All sources
+        // and destinations live in disjoint ranges of the same Sortledton graph.
+        for (std::size_t node = 0u; node < Nodes_; ++node)
         {
-            if (!Write(*Payload_, [&](SnapshotTransaction& tx)
+            static thread_local std::array<std::uint64_t, 128u> zeros{};
+            if (!Write_([&](SnapshotTransaction& tx)
             {
-                // Sortledton queues a pointer to the property until execute().
-                static thread_local std::uint64_t zero = 0u;
-                for (std::size_t word = 0; word < Words_; ++word)
-                    tx.insert_edge(edge_t(node, Nodes_ + word),
-                        reinterpret_cast<char*>(&zero), sizeof(zero));
+                for (std::size_t word = 0u; word < Words_; ++word)
+                {
+                    tx.insert_edge(
+                        edge_t(PayloadSource_(node), PayloadTarget_(word)),
+                        reinterpret_cast<char*>(&zeros[word]),
+                        sizeof(std::uint64_t));
+                }
                 return true;
-            })) return false;
+            }))
+            {
+                std::cout << "  setup diagnostic | Sortledton payload node="
+                          << node << " healthy=" << (Healthy() ? "yes" : "no")
+                          << '\n';
+                return false;
+            }
         }
+
         return true;
     }
 
-    bool StorePayload(std::size_t node, std::uint32_t word,
-                      std::uint64_t value, bool) noexcept
+    bool StorePayload(
+        std::size_t node,
+        std::uint32_t word,
+        std::uint64_t value,
+        bool) noexcept
     {
-        if (node >= Nodes_ || node != StageNode_ ||
-            word != StageWord_ || word >= Words_ ||
-            Fatal_.load(std::memory_order_acquire))
-            return false;
-        Staging_[word] = value;
-        if (++StageWord_ < Words_) return true;
-        const bool ok = Write(*Payload_, [&](SnapshotTransaction& tx)
+        if (!Ready_() ||
+            node >= Nodes_ ||
+            node != StageNode_ ||
+            word != StageWord_ ||
+            word >= Words_)
         {
-            for (std::size_t i = 0; i < Words_; ++i)
-                tx.insert_edge(edge_t(node, Nodes_ + i),
-                    reinterpret_cast<char*>(&Staging_[i]), sizeof(std::uint64_t));
+            return false;
+        }
+
+        Staging_[word] = value;
+
+        if (++StageWord_ < Words_)
+            return true;
+
+        const bool ok = Write_([&](SnapshotTransaction& tx)
+        {
+            for (std::size_t i = 0u; i < Words_; ++i)
+            {
+                tx.insert_edge(
+                    edge_t(PayloadSource_(node), PayloadTarget_(i)),
+                    reinterpret_cast<char*>(&Staging_[i]),
+                    sizeof(std::uint64_t));
+            }
             return true;
         });
-        if (ok) { ++StageNode_; StageWord_ = 0u; }
+
+        if (ok)
+        {
+            ++StageNode_;
+            StageWord_ = 0u;
+        }
+
         return ok;
     }
 
-    bool LoadPayload(std::size_t node, std::uint32_t word,
-                     std::uint64_t& value, bool) noexcept
+    bool LoadPayload(
+        std::size_t node,
+        std::uint32_t word,
+        std::uint64_t& value,
+        bool) noexcept
     {
-        if (node >= Nodes_ || word >= Words_ ||
-            Fatal_.load(std::memory_order_acquire))
+        if (!Ready_() || node >= Nodes_ || word >= Words_)
             return false;
-        return Read(*Payload_, [&](SnapshotTransaction& tx)
-        { return tx.get_weight(edge_t(node, Nodes_ + word),
-                    reinterpret_cast<char*>(&value)); });
+
+        return Read_([&](SnapshotTransaction& tx)
+        {
+            return tx.get_weight(
+                edge_t(PayloadSource_(node), PayloadTarget_(word)),
+                reinterpret_cast<char*>(&value));
+        });
     }
 
-    bool AddParent(std::size_t parent, std::size_t child, Axis axis,
-                   std::uint32_t = DEFAULT_MAX_TRIES) noexcept
+    bool AddParent(
+        std::size_t parent,
+        std::size_t child,
+        Axis axis,
+        std::uint32_t = DEFAULT_MAX_TRIES) noexcept
     {
-        if (!Legal(parent, child) ||
-            Fatal_.load(std::memory_order_acquire))
+        if (!Ready_() || !Legal_(parent, child))
             return false;
-        return Write(*Topology_, [&](SnapshotTransaction& tx)
+
+        // SnapshotTransaction retains char* property pointers until execute().
+        // Keep the ordinal alive in this calling frame, past Write_'s commit.
+        std::uint64_t ordinal = UINT64_MAX;
+        const bool inserted = Write_([&](SnapshotTransaction& tx)
         {
-            const edge_t back(BackSource(child, axis), parent);
-            if (tx.has_edge(back)) return false;
-            static thread_local std::uint64_t ordinal = 0u;
-            ordinal = 0u;
+            const edge_t back(BackSource_(child, axis), parent);
+
+            if (tx.has_edge(back))
+                return false;
+
+            std::array<bool, 64u> used{};
+            if (!ForEdges_(
+                    tx,
+                    BackSource_(child, axis),
+                    [&](std::size_t observed_parent, std::uint64_t stored)
+                    {
+                        if (stored >= K_ || !Legal_(observed_parent, child))
+                        {
+                            Fatal_.store(true, std::memory_order_release);
+                            return;
+                        }
+                        used[stored] = true;
+                    }))
+            {
+                return false;
+            }
+
             for (std::uint8_t i = 0u; i < K_; ++i)
             {
-                bool used = false;
-                if (!ForEdges(tx, BackSource(child, axis),
-                    [&](std::size_t, std::uint64_t stored)
-                    { if (stored == i) used = true; })) return false;
-                if (!used) { ordinal = i; break; }
-                if (i + 1u == K_) return false;
+                if (!used[i])
+                {
+                    ordinal = i;
+                    break;
+                }
             }
+
+            if (ordinal == UINT64_MAX)
+                return false;
+
             if constexpr (Bidirectional)
             {
-                if (tx.has_edge(edge_t(FrontSource(parent, axis), child)))
+                if (tx.has_edge(edge_t(FrontSource_(parent, axis), child)))
                     return false;
             }
-            tx.insert_edge(back, reinterpret_cast<char*>(&ordinal), sizeof(ordinal));
-            if constexpr (Bidirectional)
-                tx.insert_edge(edge_t(FrontSource(parent, axis), child),
-                    reinterpret_cast<char*>(&ordinal), sizeof(ordinal));
-            return true;
-        });
-    }
 
-    bool ReplaceParent(std::size_t old_parent, std::size_t new_parent,
-                       std::size_t child, Axis axis,
-                       std::uint32_t = DEFAULT_MAX_TRIES) noexcept
-    {
-        if (!Legal(old_parent, child) || !Legal(new_parent, child) ||
-            old_parent == new_parent ||
-            Fatal_.load(std::memory_order_acquire))
-            return false;
-        return Write(*Topology_, [&](SnapshotTransaction& tx)
-        {
-            const edge_t old_back(BackSource(child, axis), old_parent);
-            const edge_t new_back(BackSource(child, axis), new_parent);
-            static thread_local std::uint64_t ordinal = 0u;
-            ordinal = 0u;
-            if (!tx.get_weight(old_back, reinterpret_cast<char*>(&ordinal)) ||
-                ordinal >= K_ || tx.has_edge(new_back)) return false;
+            tx.insert_edge(
+                back,
+                reinterpret_cast<char*>(&ordinal),
+                sizeof(ordinal));
+
             if constexpr (Bidirectional)
             {
-                const edge_t old_front(FrontSource(old_parent, axis), child);
-                const edge_t new_front(FrontSource(new_parent, axis), child);
-                std::uint64_t check = UINT64_MAX;
-                if (!tx.get_weight(old_front, reinterpret_cast<char*>(&check)) ||
-                    check != ordinal || tx.has_edge(new_front)) return false;
-                tx.delete_edge(old_front);
-                tx.insert_edge(new_front, reinterpret_cast<char*>(&ordinal),
-                               sizeof(ordinal));
+                tx.insert_edge(
+                    edge_t(FrontSource_(parent, axis), child),
+                    reinterpret_cast<char*>(&ordinal),
+                    sizeof(ordinal));
             }
+
+            return true;
+        });
+        return inserted;
+    }
+
+    bool ReplaceParent(
+        std::size_t old_parent,
+        std::size_t new_parent,
+        std::size_t child,
+        Axis axis,
+        std::uint32_t = DEFAULT_MAX_TRIES) noexcept
+    {
+        if (!Ready_() ||
+            !Legal_(old_parent, child) ||
+            !Legal_(new_parent, child) ||
+            old_parent == new_parent)
+        {
+            return false;
+        }
+
+        std::unique_lock<std::shared_mutex> stable_write_guard;
+        if (StableReadLocks_)
+            stable_write_guard = std::unique_lock<std::shared_mutex>(StableReadLocks_[child]);
+
+        // A queued insertion stores a pointer to ordinal until tx.execute().
+        std::uint64_t ordinal = UINT64_MAX;
+        return Write_([&](SnapshotTransaction& tx)
+        {
+            const edge_t old_back(BackSource_(child, axis), old_parent);
+            const edge_t new_back(BackSource_(child, axis), new_parent);
+
+            if (!tx.get_weight(
+                    old_back,
+                    reinterpret_cast<char*>(&ordinal)) ||
+                ordinal >= K_ ||
+                tx.has_edge(new_back))
+            {
+                return false;
+            }
+
+            if constexpr (Bidirectional)
+            {
+                const edge_t old_front(FrontSource_(old_parent, axis), child);
+                const edge_t new_front(FrontSource_(new_parent, axis), child);
+
+                std::uint64_t reverse_ordinal = UINT64_MAX;
+
+                if (!tx.get_weight(
+                        old_front,
+                        reinterpret_cast<char*>(&reverse_ordinal)) ||
+                    reverse_ordinal != ordinal ||
+                    tx.has_edge(new_front))
+                {
+                    return false;
+                }
+
+                tx.delete_edge(old_front);
+                tx.insert_edge(
+                    new_front,
+                    reinterpret_cast<char*>(&ordinal),
+                    sizeof(ordinal));
+            }
+
             tx.delete_edge(old_back);
-            tx.insert_edge(new_back, reinterpret_cast<char*>(&ordinal),
-                           sizeof(ordinal));
+            tx.insert_edge(
+                new_back,
+                reinterpret_cast<char*>(&ordinal),
+                sizeof(ordinal));
+
             return true;
         });
     }
 
-    ReadResult FindParent(std::size_t child, Axis axis, std::uint8_t ordinal,
-                          std::uint32_t = 1u) noexcept
+    ReadResult FindParent(
+        std::size_t child,
+        Axis axis,
+        std::uint8_t ordinal,
+        std::uint32_t = 1u) noexcept
     {
-        if (child >= Nodes_ || ordinal >= K_ ||
-            Fatal_.load(std::memory_order_acquire))
+        if (!Ready_() || child >= Nodes_ || ordinal >= K_)
             return {};
+
         ReadResult result{};
-        const bool ok = Read(*Topology_, [&](SnapshotTransaction& tx)
+
+        const bool ok = Read_([&](SnapshotTransaction& tx)
         {
-            return ForEdges(tx, BackSource(child, axis),
+            return ForEdges_(
+                tx,
+                BackSource_(child, axis),
                 [&](std::size_t parent, std::uint64_t stored)
                 {
-                    if (stored == ordinal)
+                    if (stored != ordinal)
+                        return;
+
+                    if (!Legal_(parent, child) || result.IsFound())
                     {
-                        if (!Legal(parent, child) || result.IsFound())
-                            Fatal_.store(true);
-                        else result = Found(parent, child, ordinal);
+                        Fatal_.store(true, std::memory_order_release);
+                        return;
                     }
+
+                    result = Found_(parent, child, ordinal);
                 });
         });
-        return ok && !Fatal_.load() ? result : ReadResult{};
+
+        return ok && Healthy() ? result : ReadResult{};
     }
-    ReadResult StableFindParent(std::size_t child, Axis axis, std::uint8_t ordinal,
-                                std::uint32_t tries = 1u) noexcept
-    { return FindParent(child, axis, ordinal, tries); }
 
-    ReadResult FindFirstChild(std::size_t parent, Axis axis,
-                              std::uint32_t = 1u) noexcept
-    { return ChildRead(parent, axis, 0u, false); }
-    ReadResult FindLastChild(std::size_t parent, Axis axis,
-                             std::uint32_t = 1u) noexcept
-    { return ChildRead(parent, axis, UINT32_MAX, true); }
-    ReadResult FindNextChild(std::size_t parent, Axis axis,
-                             std::uint32_t cursor, std::uint32_t = 1u) noexcept
-    { return ChildRead(parent, axis, cursor, false); }
-    ReadResult FindPreviousChild(std::size_t parent, Axis axis,
-                                 std::uint32_t cursor, std::uint32_t = 1u) noexcept
-    { return ChildRead(parent, axis, cursor, true); }
-
-    std::uint64_t BenchmarkParentScan(Axis axis, std::uint32_t rounds) noexcept
+    ReadResult StableFindParent(
+        std::size_t child,
+        Axis axis,
+        std::uint8_t ordinal,
+        std::uint32_t tries = 1u) noexcept
     {
+        if (!Ready_() || child >= Nodes_) return {};
+        if (StableReadLocks_)
+        {
+            std::shared_lock<std::shared_mutex> stable_read_guard(StableReadLocks_[child]);
+            return FindParent(child, axis, ordinal, tries);
+        }
+        return FindParent(child, axis, ordinal, tries);
+    }
+
+    ReadResult FindFirstChild(
+        std::size_t parent,
+        Axis axis,
+        std::uint32_t = 1u) noexcept
+    {
+        return ChildRead_(parent, axis, 0u, false);
+    }
+
+    ReadResult FindLastChild(
+        std::size_t parent,
+        Axis axis,
+        std::uint32_t = 1u) noexcept
+    {
+        return ChildRead_(parent, axis, UINT32_MAX, true);
+    }
+
+    ReadResult FindNextChild(
+        std::size_t parent,
+        Axis axis,
+        std::uint32_t cursor,
+        std::uint32_t = 1u) noexcept
+    {
+        return ChildRead_(parent, axis, cursor, false);
+    }
+
+    ReadResult FindPreviousChild(
+        std::size_t parent,
+        Axis axis,
+        std::uint32_t cursor,
+        std::uint32_t = 1u) noexcept
+    {
+        return ChildRead_(parent, axis, cursor, true);
+    }
+
+    std::uint64_t BenchmarkParentScan(
+        Axis axis,
+        std::uint32_t rounds) noexcept
+    {
+        if (!Ready_())
+            return 0u;
+
         std::uint64_t sum = 0u;
-        for (std::uint32_t r = 0; r < rounds; ++r)
-            if (!Read(*Topology_, [&](SnapshotTransaction& tx)
+
+        for (std::uint32_t r = 0u; r < rounds; ++r)
+        {
+            if (!Read_([&](SnapshotTransaction& tx)
             {
-                for (std::size_t child = 0; child < Nodes_; ++child)
+                for (std::size_t child = 0u; child < Nodes_; ++child)
                 {
                     std::array<ReadResult, 64u> found{};
-                    if (!ForEdges(tx, BackSource(child, axis),
-                        [&](std::size_t parent, std::uint64_t ord)
-                        {
-                            if (ord >= K_ || !Legal(parent, child) ||
-                                found[ord].IsFound()) Fatal_.store(true);
-                            else found[ord] = Found(parent, child, ord);
-                        })) return false;
-                    for (std::size_t i = 0; i < K_; ++i)
+
+                    if (!ForEdges_(
+                            tx,
+                            BackSource_(child, axis),
+                            [&](std::size_t parent, std::uint64_t ord)
+                            {
+                                if (ord >= K_ ||
+                                    !Legal_(parent, child) ||
+                                    found[ord].IsFound())
+                                {
+                                    Fatal_.store(
+                                        true,
+                                        std::memory_order_release);
+                                    return;
+                                }
+
+                                found[ord] =
+                                    Found_(parent, child, ord);
+                            }))
+                    {
+                        return false;
+                    }
+
+                    for (std::size_t i = 0u; i < K_; ++i)
+                    {
                         sum += found[i].Locator +
-                            static_cast<std::uint64_t>(found[i].Outcome);
+                            static_cast<std::uint64_t>(
+                                found[i].Outcome);
+                    }
                 }
+
                 return true;
-            })) break;
+            }))
+            {
+                break;
+            }
+        }
+
         return sum;
     }
 
-    std::uint64_t BenchmarkReverseScan(Axis axis, bool payload,
-                                       std::uint32_t rounds) noexcept
+    std::uint64_t BenchmarkReverseScan(
+        Axis axis,
+        bool payload,
+        std::uint32_t rounds) noexcept
     {
+        if (!Ready_())
+            return 0u;
+
         std::uint64_t sum = 0u;
+
         if constexpr (Bidirectional)
         {
-            for (std::uint32_t r = 0; r < rounds; ++r)
+            for (std::uint32_t r = 0u; r < rounds; ++r)
             {
                 std::vector<std::size_t> payload_nodes;
-                if (!Read(*Topology_, [&](SnapshotTransaction& tx)
+
+                if (!Read_([&](SnapshotTransaction& tx)
                 {
-                    for (std::size_t parent = 0; parent < Nodes_; ++parent)
+                    for (std::size_t parent = 0u;
+                         parent < Nodes_;
+                         ++parent)
                     {
-                        if (!ForEdges(tx, FrontSource(parent, axis),
-                            [&](std::size_t child, std::uint64_t ord)
-                            {
-                                if (ord >= K_ || !Legal(parent, child))
-                                { Fatal_.store(true); return; }
-                                sum += child * K_ + ord;
-                                if (payload)
-                                    payload_nodes.push_back(child);
-                            })) return false;
-                        sum += static_cast<std::uint64_t>(ReadOperation::NONE);
+                        if (!ForEdges_(
+                                tx,
+                                FrontSource_(parent, axis),
+                                [&](std::size_t child,
+                                    std::uint64_t ord)
+                                {
+                                    if (ord >= K_ ||
+                                        !Legal_(parent, child))
+                                    {
+                                        Fatal_.store(
+                                            true,
+                                            std::memory_order_release);
+                                        return;
+                                    }
+
+                                    sum += child * K_ + ord;
+
+                                    if (payload)
+                                        payload_nodes.push_back(child);
+                                }))
+                        {
+                            return false;
+                        }
+
+                        sum += static_cast<std::uint64_t>(
+                            ReadOperation::NONE);
                     }
+
                     return true;
-                })) break;
-                // Sortledton's transaction manager permits one active snapshot
-                // per thread, so close the topology snapshot before payload IO.
-                for (std::size_t child : payload_nodes)
+                }))
+                {
+                    break;
+                }
+
+                // Close the topology snapshot before beginning individual
+                // payload reads on the same Sortledton manager.
+                for (const std::size_t child : payload_nodes)
                 {
                     std::uint64_t value = 0u;
-                    if (!LoadPayload(child, child % Words_, value, false))
-                    { Fatal_.store(true); break; }
+
+                    if (!LoadPayload(
+                            child,
+                            static_cast<std::uint32_t>(
+                                child % Words_),
+                            value,
+                            false))
+                    {
+                        Fatal_.store(
+                            true,
+                            std::memory_order_release);
+                        break;
+                    }
+
                     sum ^= value;
                 }
             }
         }
+
         return sum;
     }
 
-    std::uint64_t BenchmarkPayloadScan(bool, std::uint32_t rounds) noexcept
+    std::uint64_t BenchmarkPayloadScan(
+        bool,
+        std::uint32_t rounds) noexcept
     {
+        if (!Ready_())
+            return 0u;
+
         std::uint64_t sum = 0u;
-        for (std::uint32_t r = 0; r < rounds; ++r)
-            if (!Read(*Payload_, [&](SnapshotTransaction& tx)
-            {
-                for (std::size_t node = 0; node < Nodes_; ++node)
-                {
-                    std::size_t count = 0;
-                    if (!ForEdges(tx, node,
-                        [&](std::size_t target, std::uint64_t value)
-                        {
-                            if (target < Nodes_ || target >= Nodes_ + Words_)
-                                Fatal_.store(true);
-                            ++count; sum += value;
-                        })) return false;
-                    if (count != Words_) Fatal_.store(true);
-                }
-                return true;
-            })) break;
-        return sum;
-    }
 
-    bool VerifyFullTest1Graph(const BenchmarkCase& config) noexcept
-    {
-        if (config.NodeCount != Nodes_ || config.ParentCapacity != K_) return false;
-        for (Axis axis : {Axis::HORIZONTAL, Axis::VERTICAL})
-            if (!Read(*Topology_, [&](SnapshotTransaction& tx)
+        for (std::uint32_t r = 0u; r < rounds; ++r)
+        {
+            if (!Read_([&](SnapshotTransaction& tx)
             {
-                std::vector<std::size_t> expected_children(Nodes_, 0u);
-                for (std::size_t child = 0; child < Nodes_; ++child)
+                for (std::size_t node = 0u; node < Nodes_; ++node)
                 {
-                    const std::size_t count = std::min<std::size_t>(K_, child);
-                    std::array<bool, 64u> seen{};
-                    std::size_t observed = 0u;
-                    if (!ForEdges(tx, BackSource(child, axis),
-                        [&](std::size_t parent, std::uint64_t ord)
-                        {
-                            if (ord >= count || seen[ord] ||
-                                parent != (axis == Axis::HORIZONTAL
-                                    ? child - 1u - ord : ord))
-                            { Fatal_.store(true); return; }
-                            seen[ord] = true; ++observed;
-                            ++expected_children[parent];
-                        })) return false;
-                    if (observed != count) return false;
-                }
-                if constexpr (Bidirectional)
-                {
-                    for (std::size_t parent = 0; parent < Nodes_; ++parent)
-                    {
-                        std::size_t observed = 0u;
-                        if (!ForEdges(tx, FrontSource(parent, axis),
-                            [&](std::size_t child, std::uint64_t ord)
+                    std::size_t count = 0u;
+
+                    if (!ForEdges_(
+                            tx,
+                            PayloadSource_(node),
+                            [&](std::size_t target,
+                                std::uint64_t value)
                             {
-                                const std::size_t count = std::min<std::size_t>(K_, child);
-                                if (ord >= count || child <= parent ||
-                                    parent != (axis == Axis::HORIZONTAL
-                                        ? child - 1u - ord : ord))
-                                { Fatal_.store(true); return; }
-                                ++observed;
-                            })) return false;
-                        if (observed != expected_children[parent]) return false;
+                                if (target < PayloadTarget_(0u) ||
+                                    target >= PayloadTarget_(Words_))
+                                {
+                                    Fatal_.store(
+                                        true,
+                                        std::memory_order_release);
+                                    return;
+                                }
+
+                                ++count;
+                                sum += value;
+                            }))
+                    {
+                        return false;
+                    }
+
+                    if (count != Words_)
+                    {
+                        Fatal_.store(
+                            true,
+                            std::memory_order_release);
+                        return false;
                     }
                 }
+
                 return true;
-            })) return false;
+            }))
+            {
+                break;
+            }
+        }
+
+        return sum;
+    }
+
+    bool VerifyFullTest1Graph(
+        const BenchmarkCase& config) noexcept
+    {
+        if (!Ready_() ||
+            config.NodeCount != Nodes_ ||
+            config.ParentCapacity != K_)
+        {
+            return false;
+        }
+
+        for (const Axis axis :
+             {Axis::HORIZONTAL, Axis::VERTICAL})
+        {
+            if (!Read_([&](SnapshotTransaction& tx)
+            {
+                std::vector<std::size_t>
+                    expected_children(Nodes_, 0u);
+
+                for (std::size_t child = 0u;
+                     child < Nodes_;
+                     ++child)
+                {
+                    const std::size_t count =
+                        std::min<std::size_t>(K_, child);
+
+                    std::array<bool, 64u> seen{};
+                    std::size_t observed = 0u;
+
+                    if (!ForEdges_(
+                            tx,
+                            BackSource_(child, axis),
+                            [&](std::size_t parent,
+                                std::uint64_t ord)
+                            {
+                                if (ord >= count ||
+                                    seen[ord] ||
+                                    parent !=
+                                        (axis == Axis::HORIZONTAL
+                                            ? child - 1u - ord
+                                            : ord))
+                                {
+                                    Fatal_.store(
+                                        true,
+                                        std::memory_order_release);
+                                    return;
+                                }
+
+                                seen[ord] = true;
+                                ++observed;
+                                ++expected_children[parent];
+                            }))
+                    {
+                        return false;
+                    }
+
+                    if (observed != count)
+                        return false;
+                }
+
+                if constexpr (Bidirectional)
+                {
+                    for (std::size_t parent = 0u;
+                         parent < Nodes_;
+                         ++parent)
+                    {
+                        std::size_t observed = 0u;
+
+                        if (!ForEdges_(
+                                tx,
+                                FrontSource_(parent, axis),
+                                [&](std::size_t child,
+                                    std::uint64_t ord)
+                                {
+                                    const std::size_t count =
+                                        std::min<std::size_t>(
+                                            K_,
+                                            child);
+
+                                    if (ord >= count ||
+                                        child <= parent ||
+                                        parent !=
+                                            (axis ==
+                                                    Axis::HORIZONTAL
+                                                ? child - 1u - ord
+                                                : ord))
+                                    {
+                                        Fatal_.store(
+                                            true,
+                                            std::memory_order_release);
+                                        return;
+                                    }
+
+                                    ++observed;
+                                }))
+                        {
+                            return false;
+                        }
+
+                        if (observed != expected_children[parent])
+                            return false;
+                    }
+                }
+
+                return true;
+            }))
+            {
+                return false;
+            }
+        }
+
         return Healthy();
     }
 
     bool VerifyPayloadPattern() noexcept
     {
-        return Read(*Payload_, [&](SnapshotTransaction& tx)
+        if (!Ready_())
+            return false;
+
+        return Read_([&](SnapshotTransaction& tx)
         {
-            for (std::size_t node = 0; node < Nodes_; ++node)
+            for (std::size_t node = 0u; node < Nodes_; ++node)
             {
                 std::size_t count = 0u;
                 std::vector<bool> seen(Words_, false);
-                if (!ForEdges(tx, node,
-                    [&](std::size_t target, std::uint64_t value)
-                    {
-                        if (target < Nodes_ || target >= Nodes_ + Words_)
-                        { Fatal_.store(true); return; }
-                        const std::size_t word = target - Nodes_;
-                        if (seen[word] ||
-                            value != ((static_cast<std::uint64_t>(node + 1u) << 32u)
-                                ^ static_cast<std::uint64_t>(word + 1u)))
-                        { Fatal_.store(true); return; }
-                        seen[word] = true; ++count;
-                    })) return false;
-                if (count != Words_) return false;
+
+                if (!ForEdges_(
+                        tx,
+                        PayloadSource_(node),
+                        [&](std::size_t target,
+                            std::uint64_t value)
+                        {
+                            const std::size_t payload_begin =
+                                PayloadTarget_(0u);
+                            const std::size_t payload_end =
+                                PayloadTarget_(Words_);
+
+                            if (target < payload_begin ||
+                                target >= payload_end)
+                            {
+                                Fatal_.store(
+                                    true,
+                                    std::memory_order_release);
+                                return;
+                            }
+
+                            const std::size_t word =
+                                target - payload_begin;
+
+                            if (word >= Words_ ||
+                                seen[word] ||
+                                value !=
+                                    ((static_cast<std::uint64_t>(
+                                          node + 1u)
+                                      << 32u) ^
+                                     static_cast<std::uint64_t>(
+                                         word + 1u)))
+                            {
+                                Fatal_.store(
+                                    true,
+                                    std::memory_order_release);
+                                return;
+                            }
+
+                            seen[word] = true;
+                            ++count;
+                        }))
+                {
+                    return false;
+                }
+
+                if (count != Words_)
+                    return false;
             }
+
             return true;
         });
     }
 
 private:
-    bool Legal(std::size_t parent, std::size_t child) const noexcept
-    { return parent < child && child < Nodes_; }
-    std::size_t BackSource(std::size_t child, Axis axis) const noexcept
-    { return child + (axis == Axis::HORIZONTAL ? 0u : Nodes_); }
-    std::size_t FrontSource(std::size_t parent, Axis axis) const noexcept
-    { return parent + (axis == Axis::HORIZONTAL ? 2u : 3u) * Nodes_; }
-    ReadResult Found(std::size_t node, std::size_t child,
-                     std::uint64_t ord) const noexcept
-    { return {node, static_cast<std::uint32_t>(child * K_ + ord),
-              ReadOperation::FOUND, true}; }
+    bool Ready_() const noexcept
+    {
+        return Manager_ &&
+            Graph_ &&
+            !Fatal_.load(std::memory_order_acquire);
+    }
+
+    bool Legal_(
+        std::size_t parent,
+        std::size_t child) const noexcept
+    {
+        return parent < child && child < Nodes_;
+    }
+
+    std::size_t BackSource_(
+        std::size_t child,
+        Axis axis) const noexcept
+    {
+        return child +
+            (axis == Axis::HORIZONTAL ? 0u : Nodes_);
+    }
+
+    std::size_t FrontSource_(
+        std::size_t parent,
+        Axis axis) const noexcept
+    {
+        // Called only by the bidirectional specialization.
+        return parent +
+            (axis == Axis::HORIZONTAL ? 2u : 3u) * Nodes_;
+    }
+
+    std::size_t PayloadSource_(
+        std::size_t node) const noexcept
+    {
+        return TopologyNamespaceCount_ * Nodes_ + node;
+    }
+
+    std::size_t PayloadTarget_(
+        std::size_t word) const noexcept
+    {
+        return (TopologyNamespaceCount_ + 1u) * Nodes_ + word;
+    }
+
+    ReadResult Found_(
+        std::size_t node,
+        std::size_t child,
+        std::uint64_t ord) const noexcept
+    {
+        return {
+            node,
+            static_cast<std::uint32_t>(
+                child * K_ + ord),
+            ReadOperation::FOUND,
+            true};
+    }
 
     template <class Fn>
-    bool Write(VersioningBlockedSkipListAdjacencyList& ds, Fn&& fn) noexcept
+    bool Write_(Fn&& fn) noexcept
     {
-        if (Fatal_.load()) return false;
+        if (!Ready_())
+            return false;
+
         try
         {
-            auto tx = Manager_->getSnapshotTransaction(&ds, false);
+            auto tx =
+                Manager_->getSnapshotTransaction(
+                    Graph_.get(),
+                    false); // Read/write: AddParent and ReplaceParent both inspect the snapshot.
+
             bool ok = false;
-            try { ok = fn(tx) && tx.execute(); }
+
+            try
+            {
+                ok = fn(tx);
+
+                if (ok)
+                    ok = tx.execute();
+            }
             catch (...)
             {
-                // Upstream rolls back inserted vertices but does not generally
-                // undo already applied edge edits after an execute exception.
-                // Treat that as fatal rather than assuming an unchanged graph.
-                Fatal_.store(true);
-                Manager_->transactionCompleted(tx);
+                Fatal_.store(
+                    true,
+                    std::memory_order_release);
+
+                try
+                {
+                    Manager_->transactionCompleted(tx);
+                }
+                catch (...) {}
+
                 return false;
             }
+
             Manager_->transactionCompleted(tx);
             return ok;
         }
-        catch (...) { Fatal_.store(true); return false; }
+        catch (...)
+        {
+            Fatal_.store(
+                true,
+                std::memory_order_release);
+            return false;
+        }
     }
+
     template <class Fn>
-    bool Read(VersioningBlockedSkipListAdjacencyList& ds, Fn&& fn) noexcept
+    bool Read_(Fn&& fn) noexcept
     {
-        if (Fatal_.load()) return false;
+        if (!Ready_())
+            return false;
+
         try
         {
-            auto tx = Manager_->getSnapshotTransaction(&ds, false);
+            auto tx =
+                Manager_->getSnapshotTransaction(
+                    Graph_.get(),
+                    false);
+
             bool ok = false;
-            try { ok = fn(tx); }
-            catch (...) { Fatal_.store(true); }
-            Manager_->transactionCompleted(tx);
-            return ok && !Fatal_.load();
-        }
-        catch (...) { Fatal_.store(true); return false; }
-    }
-    bool CreateVertices(VersioningBlockedSkipListAdjacencyList& ds,
-                        std::size_t count) noexcept
-    {
-        for (std::size_t base = 0; base < count; base += 256u)
-            if (!Write(ds, [&](SnapshotTransaction& tx)
+
+            try
             {
-                for (std::size_t id = base; id < std::min(count, base + 256u); ++id)
-                    tx.insert_vertex(id);
+                ok = fn(tx);
+            }
+            catch (...)
+            {
+                Fatal_.store(
+                    true,
+                    std::memory_order_release);
+            }
+
+            Manager_->transactionCompleted(tx);
+
+            return ok &&
+                !Fatal_.load(std::memory_order_acquire);
+        }
+        catch (...)
+        {
+            Fatal_.store(
+                true,
+                std::memory_order_release);
+            return false;
+        }
+    }
+
+    bool CreateVertices_(
+        std::size_t count) noexcept
+    {
+        // Conservative initialization: one vertex transaction at a time.
+        // It is outside all measured steady-state mutation/read intervals.
+        for (std::size_t id = 0u; id < count; ++id)
+        {
+            if (!Write_([&](SnapshotTransaction& tx)
+            {
+                tx.insert_vertex(id);
                 return true;
-            })) return false;
+            }))
+            {
+                std::cout << "  setup diagnostic | Sortledton vertex="
+                          << id << " healthy=" << (Healthy() ? "yes" : "no")
+                          << '\n';
+                return false;
+            }
+        }
+
         return true;
     }
+
     template <class Fn>
-    bool ForEdges(SnapshotTransaction& tx, std::size_t source, Fn&& visit)
+    bool ForEdges_(
+        SnapshotTransaction& tx,
+        std::size_t source,
+        Fn&& visit)
     {
+        const auto physical_source = tx.physical_id(source);
+
+        // Sortledton's property iterator dereferences the skip-list header in
+        // its constructor, even when a source has no adjacency block. Protect
+        // the empty check with a shared row lock. The iterator acquires its own
+        // shared lock before we release this guard, so a concurrent writer
+        // cannot remove the block between the check and iterator construction.
+        struct SharedRowGuard
+        {
+            VersioningBlockedSkipListAdjacencyList& Graph;
+            vertex_id_t Source;
+            bool Held = true;
+
+            SharedRowGuard(VersioningBlockedSkipListAdjacencyList& graph,
+                           vertex_id_t source) : Graph(graph), Source(source)
+            {
+                Graph.aquire_vertex_lock_shared_p(Source);
+            }
+            ~SharedRowGuard()
+            {
+                if (Held) Graph.release_vertex_lock_shared_p(Source);
+            }
+            void Release()
+            {
+                Graph.release_vertex_lock_shared_p(Source);
+                Held = false;
+            }
+            SharedRowGuard(const SharedRowGuard&) = delete;
+            SharedRowGuard& operator=(const SharedRowGuard&) = delete;
+        } guard(*Graph_, physical_source);
+
+        if (Graph_->raw_neighbourhood_version(
+                physical_source, tx.get_version()) == nullptr)
+            return Healthy();
+
         auto iter = tx.neighbourhood_with_properties_blocked_p(
-            tx.physical_id(source));
+            physical_source);
+        guard.Release();
+
         while (iter.has_next_block())
         {
             auto [versioned, begin, end, weights, unused] =
                 iter.next_block_with_properties();
+
             (void)unused;
+
             if (versioned)
             {
                 while (iter.has_next_edge())
                 {
-                    auto [dst, weight] = iter.next_with_properties();
+                    // The property iterator advances its property column
+                    // once per *visible* edge. A versioned block may also
+                    // contain deleted/invisible edges, so its returned weight
+                    // need not belong to dst. Resolve the weight by dst and
+                    // snapshot version while the iterator holds the row lock.
+                    const auto [dst, ignored_weight] =
+                        iter.next_with_properties();
+                    (void)ignored_weight;
+
                     std::uint64_t bits = 0u;
-                    std::memcpy(&bits, &weight, sizeof(bits));
-                    visit(static_cast<std::size_t>(tx.logical_id(dst)), bits);
+                    if (!Graph_->get_weight_version_p(
+                            edge_t(physical_source, dst), tx.get_version(),
+                            reinterpret_cast<char*>(&bits)))
+                    {
+                        Fatal_.store(true, std::memory_order_release);
+                        return false;
+                    }
+
+                    visit(
+                        static_cast<std::size_t>(
+                            tx.logical_id(dst)),
+                        bits);
+
+                    if (!Healthy())
+                        return false;
                 }
             }
             else
             {
-                for (auto edge = begin; edge < end; ++edge, ++weights)
+                for (auto edge = begin;
+                     edge < end;
+                     ++edge, ++weights)
                 {
                     std::uint64_t bits = 0u;
-                    std::memcpy(&bits, weights, sizeof(bits));
-                    visit(static_cast<std::size_t>(tx.logical_id(*edge)), bits);
+                    std::memcpy(
+                        &bits,
+                        weights,
+                        sizeof(bits));
+
+                    visit(
+                        static_cast<std::size_t>(
+                            tx.logical_id(*edge)),
+                        bits);
+
+                    if (!Healthy())
+                        return false;
                 }
             }
         }
-        return !Fatal_.load();
+
+        return Healthy();
     }
-    ReadResult ChildRead(std::size_t parent, Axis axis,
-                         std::uint32_t cursor, bool reverse) noexcept
+
+    ReadResult ChildRead_(
+        std::size_t parent,
+        Axis axis,
+        std::uint32_t cursor,
+        bool reverse) noexcept
     {
-        if constexpr (!Bidirectional) return {};
-        if (parent >= Nodes_) return {};
-        ReadResult best{};
-        const bool ok = Read(*Topology_, [&](SnapshotTransaction& tx)
+        if constexpr (!Bidirectional)
         {
-            return ForEdges(tx, FrontSource(parent, axis),
-                [&](std::size_t child, std::uint64_t ord)
+            return {};
+        }
+
+        if (!Ready_() || parent >= Nodes_)
+            return {};
+
+        ReadResult best{};
+
+        const bool ok = Read_([&](SnapshotTransaction& tx)
+        {
+            return ForEdges_(
+                tx,
+                FrontSource_(parent, axis),
+                [&](std::size_t child,
+                    std::uint64_t ord)
                 {
-                    if (ord >= K_ || !Legal(parent, child))
-                    { Fatal_.store(true); return; }
-                    const auto candidate = Found(child, child, ord);
-                    if ((!reverse && candidate.Locator > cursor &&
-                         (!best.IsFound() || candidate.Locator < best.Locator)) ||
-                        (reverse && candidate.Locator < cursor &&
-                         (!best.IsFound() || candidate.Locator > best.Locator)))
+                    if (ord >= K_ ||
+                        !Legal_(parent, child))
+                    {
+                        Fatal_.store(
+                            true,
+                            std::memory_order_release);
+                        return;
+                    }
+
+                    const ReadResult candidate =
+                        Found_(child, child, ord);
+
+                    if ((!reverse &&
+                         candidate.Locator > cursor &&
+                         (!best.IsFound() ||
+                          candidate.Locator <
+                              best.Locator)) ||
+                        (reverse &&
+                         candidate.Locator < cursor &&
+                         (!best.IsFound() ||
+                          candidate.Locator >
+                              best.Locator)))
+                    {
                         best = candidate;
+                    }
                 });
         });
+
         return ok ? best : ReadResult{};
     }
 
-    // Destroy graphs before their manager. The main thread stays registered
-    // until manager destruction, after all worker threads have been joined.
+    void Cleanup_() noexcept
+    {
+        // Keep the manager alive and control thread registered while the graph
+        // is destroyed.  Then deregister thread 0 and finally destroy manager.
+        Graph_.reset();
+
+        if (Manager_ && ControlThreadRegistered_)
+        {
+            try
+            {
+                Manager_->deregister_thread(0u);
+            }
+            catch (...) {}
+
+            ControlThreadRegistered_ = false;
+        }
+
+        Manager_.reset();
+
+        Staging_.clear();
+        StableReadLocks_.reset();
+
+        Nodes_ = 0u;
+        Words_ = 0u;
+        K_ = 0u;
+        TopologyNamespaceCount_ = 0u;
+        VertexCount_ = 0u;
+        StageNode_ = 0u;
+        StageWord_ = 0u;
+    }
+
     std::unique_ptr<TransactionManager> Manager_{};
-    std::unique_ptr<VersioningBlockedSkipListAdjacencyList> Topology_{};
-    std::unique_ptr<VersioningBlockedSkipListAdjacencyList> Payload_{};
-    std::size_t Nodes_ = 0u, Words_ = 0u;
+    std::unique_ptr<VersioningBlockedSkipListAdjacencyList> Graph_{};
+    std::unique_ptr<std::shared_mutex[]> StableReadLocks_{};
+
+    bool ControlThreadRegistered_ = false;
+
+    std::size_t Nodes_ = 0u;
+    std::size_t Words_ = 0u;
     std::uint8_t K_ = 0u;
+
+    std::size_t TopologyNamespaceCount_ = 0u;
+    std::size_t VertexCount_ = 0u;
+
     std::vector<std::uint64_t> Staging_{};
-    std::size_t StageNode_ = 0u, StageWord_ = 0u;
+    std::size_t StageNode_ = 0u;
+    std::size_t StageWord_ = 0u;
+
     std::atomic<bool> Fatal_{false};
 };
 
@@ -889,12 +1590,12 @@ TimedMutationResult RunTimedMutationWorkers(Backend& backend,
 }
 
 enum class TimedStableReadStatus : std::uint8_t
-{ SUCCESS, DEADLINE, RETRY_LIMIT, BAD_CONTRACT, INVALID_PARENT };
+{ SUCCESS, DEADLINE, RETRY_LIMIT, BAD_CONTRACT, MISSING_PARENT, DISALLOWED_PARENT };
 
 template <class Backend>
 TimedStableReadStatus StableReadOneTimed(Backend& backend,
     const ReaderScenario& scenario, std::size_t writer, TimePoint deadline,
-    std::uint64_t& retries) noexcept
+    std::uint64_t& retries, ReadResult& failed_read) noexcept
 {
     const WriterSpec& spec = scenario.Writers[writer];
     for (std::uint32_t attempt = 0; attempt < RETRY_ATTEMPT_LIMIT; ++attempt)
@@ -903,11 +1604,14 @@ TimedStableReadStatus StableReadOneTimed(Backend& backend,
             return TimedStableReadStatus::DEADLINE;
         const ReadResult read = backend.StableFindParent(
             spec.Child, spec.RelationAxis, 0u, 1u);
-        if (!read.ContractValid()) return TimedStableReadStatus::BAD_CONTRACT;
+        if (!read.ContractValid())
+        { failed_read = read; return TimedStableReadStatus::BAD_CONTRACT; }
         if (read.IsRetry())
         { ++retries; PerturbSchedule(attempt); continue; }
-        if (!read.IsFound() || !scenario.ParentAllowed(writer, read.Node))
-            return TimedStableReadStatus::INVALID_PARENT;
+        if (!read.IsFound())
+        { failed_read = read; return TimedStableReadStatus::MISSING_PARENT; }
+        if (!scenario.ParentAllowed(writer, read.Node))
+        { failed_read = read; return TimedStableReadStatus::DISALLOWED_PARENT; }
         return TimedStableReadStatus::SUCCESS;
     }
     return TimedStableReadStatus::RETRY_LIMIT;
@@ -916,6 +1620,10 @@ TimedStableReadStatus StableReadOneTimed(Backend& backend,
 struct TimedReaderResult
 {
     bool Ok = false, CorrectnessOk = false, FinalVerificationOk = false;
+    bool FatalFailure = false, BackendHealthy = false;
+    TimedStableReadStatus FirstReadFailure = TimedStableReadStatus::SUCCESS;
+    ReadResult FirstFailedRead{};
+    std::size_t FirstFailedReader = ReadResult::NO_NODE;
     double ElapsedNs = 0.0;
     std::uint64_t StableReads = 0u, ReaderRetries = 0u, ReaderStarvations = 0u;
     std::uint64_t WriterSuccess = 0u, WriterRetries = 0u, WriterExhaustions = 0u;
@@ -974,6 +1682,8 @@ TimedReaderResult RunTimedReadersWithWriters(Backend& backend,
         std::uint64_t success = 0u;
         std::uint64_t retries = 0u;
         std::uint64_t starved = 0u;
+        TimedStableReadStatus failure = TimedStableReadStatus::SUCCESS;
+        ReadResult failed_read{};
     };
 
     std::array<Writer, WRITERS> writers{};
@@ -1079,7 +1789,8 @@ TimedReaderResult RunTimedReadersWithWriters(Backend& backend,
                 }
 
                 const TimedStableReadStatus status =
-                    StableReadOneTimed(backend, scenario, observed, deadline, out.retries);
+                    StableReadOneTimed(backend, scenario, observed, deadline,
+                                       out.retries, out.failed_read);
 
                 if (status == TimedStableReadStatus::SUCCESS)
                 {
@@ -1098,6 +1809,7 @@ TimedReaderResult RunTimedReadersWithWriters(Backend& backend,
                     continue;
                 }
 
+                out.failure = status;
                 correctness_failed.store(true, std::memory_order_release);
                 break;
             }
@@ -1122,15 +1834,25 @@ TimedReaderResult RunTimedReadersWithWriters(Backend& backend,
         result.WriterExhaustions += writer.exhausted;
     }
 
-    for (const auto& reader : readers)
+    for (std::size_t i = 0u; i < readers.size(); ++i)
     {
+        const Reader& reader = readers[i];
         result.StableReads += reader.success;
         result.ReaderRetries += reader.retries;
         result.ReaderStarvations += reader.starved;
+        if (reader.failure != TimedStableReadStatus::SUCCESS &&
+            result.FirstFailedReader == ReadResult::NO_NODE)
+        {
+            result.FirstFailedReader = i;
+            result.FirstReadFailure = reader.failure;
+            result.FirstFailedRead = reader.failed_read;
+        }
     }
 
+    result.FatalFailure = fatal_failure.load(std::memory_order_acquire);
     result.FinalVerificationOk =
         VerifyTimedReaderState(backend, scenario, require_reverse);
+    result.BackendHealthy = HealthyBackend(backend);
 
     result.CorrectnessOk =
         !correctness_failed.load(std::memory_order_acquire) &&
@@ -1138,7 +1860,7 @@ TimedReaderResult RunTimedReadersWithWriters(Backend& backend,
 
     result.Ok =
         result.CorrectnessOk &&
-        !fatal_failure.load(std::memory_order_acquire) &&
+        !result.FatalFailure &&
         result.StableReads != 0u &&
         result.WriterSuccess != 0u;
 
@@ -1217,16 +1939,8 @@ inline void SweepSampleProgress(
 {
     (void)sample_total;
     if (sample == 0u)
-    {
         std::cout << "    [" << std::setw(2) << current << '/' << total
-                  << ' ' << kind << "] samples:";
-    }
-    std::cout << ' ' << (sample + 1u) << std::flush;
-}
-
-inline void SweepSampleDone()
-{
-    std::cout << "  done\n";
+                  << ' ' << kind << "]\n" << std::flush;
 }
 
 template <typename Backend>
@@ -1237,10 +1951,20 @@ bool InitializeStructuralBackend(Backend& backend, const BenchmarkCase& config)
     // cache footprint differently between the two storage engines.
     constexpr std::size_t STRUCTURAL_PAYLOAD_WORDS = 1u;
     if (!InitializeBackend(
-        backend, config, STRUCTURAL_PAYLOAD_WORDS, true)) return false;
+        backend, config, STRUCTURAL_PAYLOAD_WORDS, true))
+    {
+        std::cout << "  setup diagnostic | InitializeBackend failed\n";
+        return false;
+    }
 
     if constexpr (requires { backend.PrimePayloadStorage(); })
-        return backend.PrimePayloadStorage();
+    {
+        if (!backend.PrimePayloadStorage())
+        {
+            std::cout << "  setup diagnostic | PrimePayloadStorage failed\n";
+            return false;
+        }
+    }
     return true;
 }
 
@@ -1268,11 +1992,30 @@ bool BuildMutationBackendFair(
 template <typename Backend>
 bool BuildReaderBackendFair(Backend& backend, const ReaderScenario& scenario)
 {
-    if (!InitializeStructuralBackend(backend, scenario.Config)) return false;
+    if (!InitializeStructuralBackend(backend, scenario.Config))
+    {
+        std::cout << "  setup diagnostic | structural initialization failed\n";
+        return false;
+    }
     for (const WriterSpec& writer : scenario.Writers)
     {
         if (!backend.AddParent(
-            writer.InitialParent, writer.Child, writer.RelationAxis)) return false;
+            writer.InitialParent, writer.Child, writer.RelationAxis))
+        {
+            std::cout << "  setup diagnostic | initial parent child="
+                      << writer.Child << " parent=" << writer.InitialParent
+                      << " healthy=" << (ExternalFairness::HealthyBackend(backend) ? "yes" : "no")
+                      << '\n';
+            return false;
+        }
+    }
+    if constexpr (requires { backend.EnableStableReadGuard(); })
+    {
+        if (!backend.EnableStableReadGuard())
+        {
+            std::cout << "  setup diagnostic | stable read guard failed\n";
+            return false;
+        }
     }
     return true;
 }
@@ -1467,7 +2210,7 @@ inline bool RunScenario(const BenchmarkCase& config, std::size_t case_index)
         << "      S-bidir topology edges  : " << bidir_topology_edges
         << "  (H+V, two directed edges/relation)\n"
         << "      Sortledton payload edges: " << payload_edges
-        << "  (8-byte property/edge; separate graph)\n"
+        << "  (8-byte property/edge; same graph, disjoint namespace)\n"
         << "      Sortledton allocated B  : N/A"
         << "  (no comparable public byte counter used by this adapter)\n"
         << "      Fabric slab bytes       : "
@@ -1699,6 +2442,11 @@ inline bool RunScenario(const BenchmarkCase& config, std::size_t case_index)
     const bool live_after = bidir_backend.VerifyFullTest1Graph(config);
     const GraphProof fabric_after = ProveRuntimeCombinedDAG(fabric_backend, config);
     const bool native_after = native_backend.VerifyFullTest1Graph(config);
+    std::cout << "    post-check S-native=" << (native_after ? "PASS" : "FAIL")
+              << " S-bidir=" << (live_after ? "PASS" : "FAIL")
+              << " Fabric=" << (fabric_after.Passed() ? "PASS" : "FAIL")
+              << " replacements=" << (all_replacements_succeeded ? "PASS" : "FAIL")
+              << '\n';
     ok = ok && all_replacements_succeeded && live_after && native_after &&
         fabric_after.Passed() && native_backend.Healthy() && bidir_backend.Healthy();
     StageEnd(ok);
@@ -1714,11 +2462,13 @@ inline Result Run(const std::array<BenchmarkCase, 4u>& cases)
         << "Each case uses the same logical N, K and fully populated H/V bounded DAG.\n"
         << "S-bidir uses two directed Sortledton edges/logical relation. Because this\n"
         << "Sortledton API has no Fabric-equivalent vertex payload row, 1 KiB/node is\n"
-        << "encoded as 128 weighted payload edges in a separate Sortledton graph.\n"
+        << "encoded as 128 weighted payload edges in a disjoint namespace of the same Sortledton graph.\n"
         << "Four measured samples are taken per row with backend order alternated.\n"
         << "Bulk Sortledton read rows retain one snapshot/iterator per scan round.\n"
         << "Read/traversal rows use the bidirectional contract; replacement rows also\n"
-        << "show S-native one-edge transactions as a non-equivalent lower bound.\n";
+        << "show S-native one-edge transactions as a non-equivalent lower bound.\n"
+        << "Adapter lifecycle: one Sortledton graph + one transaction manager,\n"
+        << "with disjoint topology/payload vertex namespaces.\n";
 
     bool ok = true;
     for (std::size_t i = 0u; i < cases.size(); ++i)
@@ -1861,7 +2611,6 @@ inline bool RunCase(
             fabric_limit[run] = result.Fabric.RetryLimitRate();
         }
 
-        SweepSampleDone();
 
         const bool native_ok = native_bad == 0u;
         const bool bidir_ok = bidir_bad == 0u;
@@ -1963,16 +2712,65 @@ struct ReaderTriplet
     TimedReaderResult Fabric{};
 };
 
+inline const char* FailureName(TimedStableReadStatus status) noexcept
+{
+    switch (status)
+    {
+    case TimedStableReadStatus::SUCCESS: return "none";
+    case TimedStableReadStatus::DEADLINE: return "deadline";
+    case TimedStableReadStatus::RETRY_LIMIT: return "retry-limit";
+    case TimedStableReadStatus::BAD_CONTRACT: return "bad-contract";
+    case TimedStableReadStatus::MISSING_PARENT: return "missing-parent";
+    case TimedStableReadStatus::DISALLOWED_PARENT: return "disallowed-parent";
+    }
+    return "unknown";
+}
+
+inline void PrintFailureDiagnostic(const char* backend,
+    std::size_t sample, const TimedReaderResult& result,
+    const ReaderScenario& scenario)
+{
+    std::cout << "      diagnostic | " << backend << " sample=" << sample
+              << " reads=" << result.StableReads
+              << " writes=" << result.WriterSuccess
+              << " read-failure=" << FailureName(result.FirstReadFailure);
+    if (result.FirstFailedReader != ReadResult::NO_NODE)
+    {
+        const std::size_t observed = result.FirstFailedReader %
+            ConcurrencyConfig::READER_WRITER_COUNT;
+        std::cout << " reader=" << result.FirstFailedReader
+                  << " child=" << scenario.Writers[observed].Child
+                  << " outcome=" << static_cast<unsigned>(result.FirstFailedRead.Outcome);
+        if (result.FirstFailedRead.IsFound())
+            std::cout << " parent=" << result.FirstFailedRead.Node;
+    }
+    std::cout << " final=" << (result.FinalVerificationOk ? "PASS" : "FAIL")
+              << " healthy=" << (result.BackendHealthy ? "yes" : "no")
+              << " fatal=" << (result.FatalFailure ? "yes" : "no") << '\n';
+}
+
 inline bool BuildThreeReaderBackends(
     SortledtonNativeBackend& native,
     SortledtonBidirBackend& bidir,
     RuntimeAPCFabricBackend& fabric,
     const ReaderScenario& scenario)
 {
-    return
-        BuildReaderBackendFair(native, scenario) &&
-        BuildReaderBackendFair(bidir, scenario) &&
-        BuildReaderBackendFair(fabric, scenario);
+    if (!BuildReaderBackendFair(native, scenario))
+    {
+        std::cout << "  setup diagnostic | backend=S-native\n";
+        return false;
+    }
+    if (!BuildReaderBackendFair(bidir, scenario))
+    {
+        std::cout << "  setup diagnostic | backend=S-bidir\n";
+        return false;
+    }
+    if (!BuildReaderBackendFair(fabric, scenario))
+    {
+        std::cout << "  setup diagnostic | backend=Fabric\n";
+        return false;
+    }
+    return true;
 }
 
 inline bool RunCase(
@@ -1994,7 +2792,8 @@ inline bool RunCase(
         << " | N=" << config.NodeCount
         << " | K=" << static_cast<unsigned>(config.ParentCapacity)
         << " | parent-pool=" << scenario.ParentCount
-        << " | " << measurement.count() << " ms/backend/sample\n";
+        << " | " << measurement.count() << " ms/backend/sample\n"
+        << "    Sortledton Test 3 measures a per-child read/write guard.\n";
 
     bool all_ok = true;
 
@@ -2016,6 +2815,7 @@ inline bool RunCase(
         std::size_t native_bad = 0u;
         std::size_t bidir_bad = 0u;
         std::size_t fabric_bad = 0u;
+        bool native_reported = false, bidir_reported = false, fabric_reported = false;
 
         for (std::size_t run = 0u;
              run < ConcurrencyConfig::MEASURED_RUNS;
@@ -2069,6 +2869,12 @@ inline bool RunCase(
             native_bad += static_cast<std::size_t>(!result.Native.Ok);
             bidir_bad += static_cast<std::size_t>(!result.Bidir.Ok);
             fabric_bad += static_cast<std::size_t>(!result.Fabric.Ok);
+            if (!result.Native.Ok && !native_reported)
+            { PrintFailureDiagnostic("S-native", run + 1u, result.Native, scenario); native_reported = true; }
+            if (!result.Bidir.Ok && !bidir_reported)
+            { PrintFailureDiagnostic("S-bidir", run + 1u, result.Bidir, scenario); bidir_reported = true; }
+            if (!result.Fabric.Ok && !fabric_reported)
+            { PrintFailureDiagnostic("Fabric", run + 1u, result.Fabric, scenario); fabric_reported = true; }
 
             n_read[run] = result.Native.ReadMops();
             b_read[run] = result.Bidir.ReadMops();
@@ -2091,7 +2897,6 @@ inline bool RunCase(
             f_write_limit[run] = result.Fabric.WriterRetryLimitRate();
         }
 
-        SweepSampleDone();
 
         const bool native_ok = native_bad == 0u;
         const bool bidir_ok = bidir_bad == 0u;
@@ -2168,9 +2973,11 @@ inline Result Run(
 {
     Banner("TEST 3A - HOTSPOT STABLE READS + TWO WRITERS / FIXED-DURATION");
     std::cout
-        << "Equal read/write interval for all backends. N=S-native, B=S-bidir, F=Fabric.\n"
-        << "Both Sortledton modes use a fresh Sortledton snapshot/read; Fabric uses its public\n"
-        << "sequence-validated stable read. Retry-limit events are reported, not hidden.\n";
+        << "Equal read/write interval. N=S-native+guard, B=S-bidir+guard, F=Fabric.\n"
+        << "Sortledton takes a fresh snapshot under an adapter per-child shared guard;\n"
+        << "the corresponding writer holds that guard until replacement commits.\n"
+        << "Fabric uses its public sequence-validated stable read.\n"
+        << "Retry-limit events are reported, not hidden.\n";
 
     bool hotspot_ok = true;
     for (std::size_t i = 0u; i < cases.size(); ++i)
@@ -2260,7 +3067,7 @@ inline int Run(std::size_t lower_node_count = 100u,
     if (!ValidateRunArguments(lower_node_count, higher_node_count,
                               lower_parent_capacity, higher_parent_capacity,
                               usable_thread_count)) return 1;
-    // TransactionManager registers the main thread at id 0 and permits 63
+    // The adapter registers the main thread at id 0 and permits 63
     // additional threads (two writers plus the reader sweep in Test 3).
     if (usable_thread_count > 63u)
     {

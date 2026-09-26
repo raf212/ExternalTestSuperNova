@@ -1,5 +1,4 @@
 - LiveGraph
-
 ```bash
 g++ main.cpp \
     -std=c++20 \
@@ -33,7 +32,7 @@ g++ main.cpp \
     -I./sortledton \
     -L./SuperNova/build-release \
     -latomiccim_core \
-    -Wl,-rpath,'$ORIGIN/sortledton/build' \
+    ./sortledton/build/libsortledton.a \
     -ltbb \
     -pthread \
     -o sortledton_vs_supernova
