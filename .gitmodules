@@ -4,3 +4,6 @@
 [submodule "SuperNova"]
 	path = SuperNova
 	url = https://github.com/raf212/SuperNova
+[submodule "sortledton"]
+	path = sortledton
+	url = https://gitlab.db.in.tum.de/per.fuchs/sortledton.git
