@@ -1,0 +1,1406 @@
+
+BENCHMARK CONTEXT
+  C++ language level      : 202002
+  pointer width           : 64 bits
+  hardware_concurrency    : 20
+  uint64 atomic lock-free : YES
+  assertions              : disabled (NDEBUG)
+  compiler                : GCC 13.3.0
+  note                    : CPU model, clock policy, compiler flags, and OS
+                            should be recorded externally for publication.
+  result_file            : LiveGraphVsSuperNova_results.txt
+  output_mode            : text file (terminal suppressed)
+
+LiveGraph-native vs LiveGraph-bidirectional vs SuperNova; four measured samples/point; writer/reader sweep 1..16; fixed interval=250 ms/system/sample
+
+================================================================================
+TEST 1 - SCALED FAIR BIDIRECTIONAL DAG / 1 KiB PAYLOAD COMPARISON
+================================================================================
+Official LiveGraph vs single-region SuperNova Fabric.
+Each case uses the same N, K, fully populated H/V bounded topology, and
+exactly 128 x uint64_t (1024 B) payload per node. Four measured samples
+are taken per row with backend order alternated. LiveGraph bulk read rows
+use a retained read-only snapshot and native iterator for each scan round.
+Read/traversal rows require the bidirectional contract; replacement rows additionally
+show LG-native one-edge transactions as a non-equivalent lower bound.
+
+  CASE 1/4  N=100  K=4
+    [stage 1/13] measured incremental construction... done
+  construction / graph        LG=40395485.00 ns/op  Fabric=  96372.00 ns/op  cost(LG/F)=  419.16x
+    [stage 2/13] persistent graph build... done
+    edges/axis=390  payload/node=1024 B  Fabric slab=141440 B (persistent LiveGraph footprint is probed separately below)
+    [storage] persistent footprint probe... done
+      LiveGraph-native disk: allocated=0.273 MiB  logical-files=2048.000 MiB
+      LiveGraph-bidir  disk: allocated=0.402 MiB  logical-files=2048.000 MiB
+      Fabric in-memory slab: 0.135 MiB (SlabBytesForTest; not a disk allocation)
+      Storage figures use different persistence formats and are descriptive.
+    [stage 3/13] pre-benchmark topology + payload verification... done
+    [stage 4/13] H parent lookup bulk scan... done
+  H parent scan               LG=     18.69 ns/op  Fabric=      6.65 ns/op  cost(LG/F)=    2.81x
+    [stage 5/13] V parent lookup bulk scan... done
+  V parent scan               LG=     18.91 ns/op  Fabric=      6.66 ns/op  cost(LG/F)=    2.84x
+    [stage 6/13] H native reverse-child traversal... done
+  H reverse-child scan        LG=      7.49 ns/op  Fabric=     16.93 ns/op  cost(LG/F)=    0.44x
+    [stage 7/13] V native reverse-child traversal... done
+  V reverse-child scan        LG=      5.14 ns/op  Fabric=     15.57 ns/op  cost(LG/F)=    0.33x
+    [stage 8/13] sequential payload scan: LiveGraph snapshot vs Fabric direct... done
+  payload seq snapshot/direct LG=      0.29 ns/op  Fabric=      0.46 ns/op  cost(LG/F)=    0.63x
+    [stage 9/13] sequential payload scan: LiveGraph snapshot vs Fabric atomic... done
+  payload seq snapshot/atomic LG=      0.29 ns/op  Fabric=      0.59 ns/op  cost(LG/F)=    0.49x
+    [stage 10/13] H child traversal + payload... done
+  H child + payload           LG=      9.52 ns/op  Fabric=     17.46 ns/op  cost(LG/F)=    0.55x
+    replacement workload=10000 logical replacements/sample x 4 samples/backend
+    [stage 11/13] H parent replacement: native / bidir / Fabric... done
+  H parent replace           
+      LG-native=  41822.57 ns/op  LG-bidir=  44469.13 ns/op  Fabric=     85.69 ns/op
+      cost ratios: LG-native/Fabric=488.05x  LG-bidir/Fabric=518.93x
+    [stage 12/13] V parent replacement: native / bidir / Fabric... done
+  V parent replace           
+      LG-native=  46412.18 ns/op  LG-bidir=  45417.27 ns/op  Fabric=     69.39 ns/op
+      cost ratios: LG-native/Fabric=668.88x  LG-bidir/Fabric=654.54x
+    [stage 13/13] post-mutation topology verification... done
+    integrity=PASS
+
+  CASE 2/4  N=100  K=32
+    [stage 1/13] measured incremental construction... done
+  construction / graph        LG=217818523.00 ns/op  Fabric= 532372.50 ns/op  cost(LG/F)=  409.15x
+    [stage 2/13] persistent graph build... done
+    edges/axis=2672  payload/node=1024 B  Fabric slab=231040 B (persistent LiveGraph footprint is probed separately below)
+    [storage] persistent footprint probe... done
+      LiveGraph-native disk: allocated=0.520 MiB  logical-files=2048.000 MiB
+      LiveGraph-bidir  disk: allocated=1.531 MiB  logical-files=2048.000 MiB
+      Fabric in-memory slab: 0.220 MiB (SlabBytesForTest; not a disk allocation)
+      Storage figures use different persistence formats and are descriptive.
+    [stage 3/13] pre-benchmark topology + payload verification... done
+    [stage 4/13] H parent lookup bulk scan... done
+  H parent scan               LG=     23.11 ns/op  Fabric=      6.64 ns/op  cost(LG/F)=    3.48x
+    [stage 5/13] V parent lookup bulk scan... done
+  V parent scan               LG=     23.84 ns/op  Fabric=      6.61 ns/op  cost(LG/F)=    3.60x
+    [stage 6/13] H native reverse-child traversal... done
+  H reverse-child scan        LG=      4.37 ns/op  Fabric=     18.45 ns/op  cost(LG/F)=    0.24x
+    [stage 7/13] V native reverse-child traversal... done
+  V reverse-child scan        LG=      4.08 ns/op  Fabric=     18.37 ns/op  cost(LG/F)=    0.22x
+    [stage 8/13] sequential payload scan: LiveGraph snapshot vs Fabric direct... done
+  payload seq snapshot/direct LG=      0.30 ns/op  Fabric=      0.46 ns/op  cost(LG/F)=    0.65x
+    [stage 9/13] sequential payload scan: LiveGraph snapshot vs Fabric atomic... done
+  payload seq snapshot/atomic LG=      0.29 ns/op  Fabric=      0.59 ns/op  cost(LG/F)=    0.50x
+    [stage 10/13] H child traversal + payload... done
+  H child + payload           LG=      6.41 ns/op  Fabric=     18.96 ns/op  cost(LG/F)=    0.34x
+    replacement workload=10000 logical replacements/sample x 4 samples/backend
+    [stage 11/13] H parent replacement: native / bidir / Fabric... done
+  H parent replace           
+      LG-native=  43765.61 ns/op  LG-bidir=  41947.33 ns/op  Fabric=     95.82 ns/op
+      cost ratios: LG-native/Fabric=456.76x  LG-bidir/Fabric=437.79x
+    [stage 12/13] V parent replacement: native / bidir / Fabric... done
+  V parent replace           
+      LG-native=  43600.58 ns/op  LG-bidir=  41960.47 ns/op  Fabric=     80.32 ns/op
+      cost ratios: LG-native/Fabric=542.85x  LG-bidir/Fabric=522.43x
+    [stage 13/13] post-mutation topology verification... done
+    integrity=PASS
+
+  CASE 3/4  N=10000  K=4
+    [stage 1/13] measured incremental construction... done
+  construction / graph        LG=3325959791.00 ns/op  Fabric=10559813.50 ns/op  cost(LG/F)=  314.96x
+    [stage 2/13] persistent graph build... done
+    edges/axis=39990  payload/node=1024 B  Fabric slab=14080384 B (persistent LiveGraph footprint is probed separately below)
+    [storage] persistent footprint probe... done
+      LiveGraph-native disk: allocated=27.465 MiB  logical-files=2048.000 MiB
+      LiveGraph-bidir  disk: allocated=40.324 MiB  logical-files=2048.000 MiB
+      Fabric in-memory slab: 13.428 MiB (SlabBytesForTest; not a disk allocation)
+      Storage figures use different persistence formats and are descriptive.
+    [stage 3/13] pre-benchmark topology + payload verification... done
+    [stage 4/13] H parent lookup bulk scan... done
+  H parent scan               LG=     26.68 ns/op  Fabric=      6.97 ns/op  cost(LG/F)=    3.83x
+    [stage 5/13] V parent lookup bulk scan... done
+  V parent scan               LG=     28.59 ns/op  Fabric=      6.84 ns/op  cost(LG/F)=    4.18x
+    [stage 6/13] H native reverse-child traversal... done
+  H reverse-child scan        LG=      9.12 ns/op  Fabric=     17.67 ns/op  cost(LG/F)=    0.52x
+    [stage 7/13] V native reverse-child traversal... done
+  V reverse-child scan        LG=      5.35 ns/op  Fabric=     15.82 ns/op  cost(LG/F)=    0.34x
+    [stage 8/13] sequential payload scan: LiveGraph snapshot vs Fabric direct... done
+  payload seq snapshot/direct LG=      0.85 ns/op  Fabric=      0.64 ns/op  cost(LG/F)=    1.33x
+    [stage 9/13] sequential payload scan: LiveGraph snapshot vs Fabric atomic... done
+  payload seq snapshot/atomic LG=      0.65 ns/op  Fabric=      0.76 ns/op  cost(LG/F)=    0.84x
+    [stage 10/13] H child traversal + payload... done
+  H child + payload           LG=     16.66 ns/op  Fabric=     17.33 ns/op  cost(LG/F)=    0.96x
+    replacement workload=10000 logical replacements/sample x 4 samples/backend
+    [stage 11/13] H parent replacement: native / bidir / Fabric... done
+  H parent replace           
+      LG-native=  40052.52 ns/op  LG-bidir=  43430.70 ns/op  Fabric=     87.87 ns/op
+      cost ratios: LG-native/Fabric=455.79x  LG-bidir/Fabric=494.23x
+    [stage 12/13] V parent replacement: native / bidir / Fabric... done
+  V parent replace           
+      LG-native=  43592.01 ns/op  LG-bidir=  49724.91 ns/op  Fabric=     71.79 ns/op
+      cost ratios: LG-native/Fabric=607.21x  LG-bidir/Fabric=692.63x
+    [stage 13/13] post-mutation topology verification... done
+    integrity=PASS
+
+  CASE 4/4  N=10000  K=32
+    [stage 1/13] measured incremental construction... done
+  construction / graph        LG=26144814061.50 ns/op  Fabric=50332145.50 ns/op  cost(LG/F)=  519.45x
+    [stage 2/13] persistent graph build... done
+    edges/axis=319472  payload/node=1024 B  Fabric slab=23040384 B (persistent LiveGraph footprint is probed separately below)
+    [storage] persistent footprint probe... done
+      LiveGraph-native disk: allocated=56.719 MiB  logical-files=2048.000 MiB
+      LiveGraph-bidir  disk: allocated=178.938 MiB  logical-files=2048.000 MiB
+      Fabric in-memory slab: 21.973 MiB (SlabBytesForTest; not a disk allocation)
+      Storage figures use different persistence formats and are descriptive.
+    [stage 3/13] pre-benchmark topology + payload verification... done
+    [stage 4/13] H parent lookup bulk scan... done
+  H parent scan               LG=     46.91 ns/op  Fabric=      6.64 ns/op  cost(LG/F)=    7.06x
+    [stage 5/13] V parent lookup bulk scan... done
+  V parent scan               LG=     56.26 ns/op  Fabric=      6.57 ns/op  cost(LG/F)=    8.56x
+    [stage 6/13] H native reverse-child traversal... done
+  H reverse-child scan        LG=      9.09 ns/op  Fabric=     17.42 ns/op  cost(LG/F)=    0.52x
+    [stage 7/13] V native reverse-child traversal... done
+  V reverse-child scan        LG=      6.12 ns/op  Fabric=     18.00 ns/op  cost(LG/F)=    0.34x
+    [stage 8/13] sequential payload scan: LiveGraph snapshot vs Fabric direct... done
+  payload seq snapshot/direct LG=      0.66 ns/op  Fabric=      0.58 ns/op  cost(LG/F)=    1.13x
+    [stage 9/13] sequential payload scan: LiveGraph snapshot vs Fabric atomic... done
+  payload seq snapshot/atomic LG=      0.67 ns/op  Fabric=      0.78 ns/op  cost(LG/F)=    0.85x
+    [stage 10/13] H child traversal + payload... done
+  H child + payload           LG=     12.70 ns/op  Fabric=     18.92 ns/op  cost(LG/F)=    0.67x
+    replacement workload=10000 logical replacements/sample x 4 samples/backend
+    [stage 11/13] H parent replacement: native / bidir / Fabric... done
+  H parent replace           
+      LG-native=  40896.85 ns/op  LG-bidir=  42034.88 ns/op  Fabric=     96.74 ns/op
+      cost ratios: LG-native/Fabric=422.76x  LG-bidir/Fabric=434.52x
+    [stage 12/13] V parent replacement: native / bidir / Fabric... done
+  V parent replace           
+      LG-native=  40286.94 ns/op  LG-bidir=  47359.05 ns/op  Fabric=     76.70 ns/op
+      cost ratios: LG-native/Fabric=525.27x  LG-bidir/Fabric=617.47x
+    [stage 13/13] post-mutation topology verification... done
+    integrity=PASS
+
+TEST 1 OVERALL: PASS
+
+================================================================================
+TEST 2A - HOTSPOT STRUCTURAL MUTATION / FIXED-DURATION
+================================================================================
+Equal wall-clock interval for all backends. N=LG-native (one-way lower bound),
+B=LG-bidir (end-to-end bidirectional), F=SuperNova Fabric. Throughput is
+successful replacements/s. retry-limit/op reports 4096-attempt budget hits;
+these are contention/progress events, not integrity failures.
+
+  CASE 1/4 | N=100 | K=4 | parent-pool=4 | 250 ms/backend/sample
+    [ 1/16 writers] samples: 1 2 3 4  done
+      throughput | N= 25.2 Kops/s | B= 25.0 Kops/s | F=17.55 Mops/s
+      contention | retry/op N/B/F=0/0/0 | retry-limit/op=0/0/0
+      ratio      | throughput F/N=696.84x | F/B=700.63x | PASS
+    [ 2/16 writers] samples: 1 2 3 4  done
+      throughput | N= 47.2 Kops/s | B= 41.5 Kops/s | F= 8.24 Mops/s
+      contention | retry/op N/B/F=0/0.0104/0.6309 | retry-limit/op=0/0/1.71e-06
+      ratio      | throughput F/N=174.52x | F/B=198.39x | PASS
+    [ 3/16 writers] samples: 1 2 3 4  done
+      throughput | N= 70.3 Kops/s | B=  1.1 Kops/s | F= 7.87 Mops/s
+      contention | retry/op N/B/F=0/2.8835/1.5950 | retry-limit/op=0/0/4.78e-06
+      ratio      | throughput F/N=111.93x | F/B=7475.99x | PASS
+    [ 4/16 writers] samples: 1 2 3 4  done
+      throughput | N= 76.1 Kops/s | B=  1.1 Kops/s | F= 8.06 Mops/s
+      contention | retry/op N/B/F=0/3.7458/3.1766 | retry-limit/op=0/0/3.72e-06
+      ratio      | throughput F/N=105.90x | F/B=7345.42x | PASS
+    [ 5/16 writers] samples: 1 2 3 4  done
+      throughput | N= 87.3 Kops/s | B=  1.0 Kops/s | F= 7.85 Mops/s
+      contention | retry/op N/B/F=0/4.7662/4.8809 | retry-limit/op=0/0/4.32e-06
+      ratio      | throughput F/N=89.89x | F/B=7713.75x | PASS
+    [ 6/16 writers] samples: 1 2 3 4  done
+      throughput | N=116.5 Kops/s | B=  1.0 Kops/s | F= 7.63 Mops/s
+      contention | retry/op N/B/F=0/5.4674/7.2573 | retry-limit/op=0/0/7.57e-06
+      ratio      | throughput F/N=65.49x | F/B=7586.56x | PASS
+    [ 7/16 writers] samples: 1 2 3 4  done
+      throughput | N=138.2 Kops/s | B=   923 ops/s | F= 7.26 Mops/s
+      contention | retry/op N/B/F=0/5.6311/9.5716 | retry-limit/op=0/0/8.74e-06
+      ratio      | throughput F/N=52.55x | F/B=7869.30x | PASS
+    [ 8/16 writers] samples: 1 2 3 4  done
+      throughput | N=122.4 Kops/s | B=   910 ops/s | F= 6.40 Mops/s
+      contention | retry/op N/B/F=0/6.4644/11.5782 | retry-limit/op=0/0/1.71e-05
+      ratio      | throughput F/N=52.28x | F/B=7027.23x | PASS
+    [ 9/16 writers] samples: 1 2 3 4  done
+      throughput | N=125.0 Kops/s | B=   851 ops/s | F= 5.96 Mops/s
+      contention | retry/op N/B/F=0/7.2265/11.7748 | retry-limit/op=0/0/7.32e-06
+      ratio      | throughput F/N=47.67x | F/B=7004.14x | PASS
+    [10/16 writers] samples: 1 2 3 4  done
+      throughput | N=125.9 Kops/s | B=   931 ops/s | F= 5.45 Mops/s
+      contention | retry/op N/B/F=0/8.0972/12.4024 | retry-limit/op=0/0/8.26e-06
+      ratio      | throughput F/N=43.27x | F/B=5850.58x | PASS
+    [11/16 writers] samples: 1 2 3 4  done
+      throughput | N=137.0 Kops/s | B=   853 ops/s | F= 5.37 Mops/s
+      contention | retry/op N/B/F=0/7.8862/13.8550 | retry-limit/op=0/0/7.05e-06
+      ratio      | throughput F/N=39.22x | F/B=6301.25x | PASS
+    [12/16 writers] samples: 1 2 3 4  done
+      throughput | N=148.3 Kops/s | B=   773 ops/s | F= 5.17 Mops/s
+      contention | retry/op N/B/F=0/9.6499/15.3836 | retry-limit/op=0/0/1.50e-05
+      ratio      | throughput F/N=34.88x | F/B=6685.84x | PASS
+    [13/16 writers] samples: 1 2 3 4  done
+      throughput | N=152.7 Kops/s | B=   899 ops/s | F= 4.97 Mops/s
+      contention | retry/op N/B/F=0/8.1938/16.7142 | retry-limit/op=0/0/1.23e-05
+      ratio      | throughput F/N=32.51x | F/B=5525.60x | PASS
+    [14/16 writers] samples: 1 2 3 4  done
+      throughput | N=151.2 Kops/s | B=   972 ops/s | F= 4.71 Mops/s
+      contention | retry/op N/B/F=0/9.4743/17.2921 | retry-limit/op=0/0/1.02e-05
+      ratio      | throughput F/N=31.15x | F/B=4845.75x | PASS
+    [15/16 writers] samples: 1 2 3 4  done
+      throughput | N=162.1 Kops/s | B=   906 ops/s | F= 4.52 Mops/s
+      contention | retry/op N/B/F=0/10.5240/19.0806 | retry-limit/op=0/0/1.10e-05
+      ratio      | throughput F/N=27.87x | F/B=4984.37x | PASS
+    [16/16 writers] samples: 1 2 3 4  done
+      throughput | N=157.5 Kops/s | B=   796 ops/s | F= 4.20 Mops/s
+      contention | retry/op N/B/F=0/11.8059/21.6062 | retry-limit/op=0/0/5.20e-06
+      ratio      | throughput F/N=26.68x | F/B=5277.00x | PASS
+
+  CASE 2/4 | N=100 | K=32 | parent-pool=4 | 250 ms/backend/sample
+    [ 1/16 writers] samples: 1 2 3 4  done
+      throughput | N= 25.7 Kops/s | B= 24.9 Kops/s | F=15.16 Mops/s
+      contention | retry/op N/B/F=0/0/0 | retry-limit/op=0/0/0
+      ratio      | throughput F/N=590.77x | F/B=608.54x | PASS
+    [ 2/16 writers] samples: 1 2 3 4  done
+      throughput | N= 44.9 Kops/s | B= 44.7 Kops/s | F= 7.72 Mops/s
+      contention | retry/op N/B/F=0/0.0071/0.5419 | retry-limit/op=0/0/2.85e-06
+      ratio      | throughput F/N=171.87x | F/B=172.57x | PASS
+    [ 3/16 writers] samples: 1 2 3 4  done
+      throughput | N= 71.5 Kops/s | B=  1.1 Kops/s | F= 7.57 Mops/s
+      contention | retry/op N/B/F=0/2.7172/1.6743 | retry-limit/op=0/0/4.86e-06
+      ratio      | throughput F/N=105.93x | F/B=6630.13x | PASS
+    [ 4/16 writers] samples: 1 2 3 4  done
+      throughput | N= 68.3 Kops/s | B=  1.0 Kops/s | F= 7.76 Mops/s
+      contention | retry/op N/B/F=0/3.8393/3.3495 | retry-limit/op=0/0/4.34e-06
+      ratio      | throughput F/N=113.60x | F/B=7535.22x | PASS
+    [ 5/16 writers] samples: 1 2 3 4  done
+      throughput | N= 97.8 Kops/s | B=   906 ops/s | F= 7.44 Mops/s
+      contention | retry/op N/B/F=0/4.9574/5.4519 | retry-limit/op=0/0/7.20e-06
+      ratio      | throughput F/N=76.06x | F/B=8212.10x | PASS
+    [ 6/16 writers] samples: 1 2 3 4  done
+      throughput | N=126.9 Kops/s | B=   934 ops/s | F= 6.93 Mops/s
+      contention | retry/op N/B/F=0/5.5280/7.9773 | retry-limit/op=0/0/6.91e-06
+      ratio      | throughput F/N=54.59x | F/B=7418.82x | PASS
+    [ 7/16 writers] samples: 1 2 3 4  done
+      throughput | N=123.5 Kops/s | B=   917 ops/s | F= 6.61 Mops/s
+      contention | retry/op N/B/F=0/6.0797/10.4669 | retry-limit/op=0/0/5.11e-06
+      ratio      | throughput F/N=53.55x | F/B=7212.71x | PASS
+    [ 8/16 writers] samples: 1 2 3 4  done
+      throughput | N=124.2 Kops/s | B=   975 ops/s | F= 5.85 Mops/s
+      contention | retry/op N/B/F=0/6.5836/10.6894 | retry-limit/op=0/0/5.75e-06
+      ratio      | throughput F/N=47.11x | F/B=5997.37x | PASS
+    [ 9/16 writers] samples: 1 2 3 4  done
+      throughput | N=126.1 Kops/s | B=  1.1 Kops/s | F= 5.53 Mops/s
+      contention | retry/op N/B/F=0/5.9908/12.9703 | retry-limit/op=0/0/2.12e-05
+      ratio      | throughput F/N=43.88x | F/B=5156.90x | PASS
+    [10/16 writers] samples: 1 2 3 4  done
+      throughput | N=131.6 Kops/s | B=   841 ops/s | F= 5.21 Mops/s
+      contention | retry/op N/B/F=0/8.2072/13.2800 | retry-limit/op=0/0/1.22e-05
+      ratio      | throughput F/N=39.60x | F/B=6192.39x | PASS
+    [11/16 writers] samples: 1 2 3 4  done
+      throughput | N=131.4 Kops/s | B=   801 ops/s | F= 4.89 Mops/s
+      contention | retry/op N/B/F=0/9.2181/14.9101 | retry-limit/op=0/0/1.55e-05
+      ratio      | throughput F/N=37.19x | F/B=6099.44x | PASS
+    [12/16 writers] samples: 1 2 3 4  done
+      throughput | N=141.1 Kops/s | B=   800 ops/s | F= 4.72 Mops/s
+      contention | retry/op N/B/F=0/9.2466/16.6465 | retry-limit/op=0/0/6.82e-06
+      ratio      | throughput F/N=33.46x | F/B=5898.61x | PASS
+    [13/16 writers] samples: 1 2 3 4  done
+      throughput | N=148.0 Kops/s | B=   984 ops/s | F= 4.56 Mops/s
+      contention | retry/op N/B/F=0/10.2369/18.5415 | retry-limit/op=0/0/1.26e-05
+      ratio      | throughput F/N=30.82x | F/B=4636.30x | PASS
+    [14/16 writers] samples: 1 2 3 4  done
+      throughput | N=158.5 Kops/s | B=   909 ops/s | F= 4.37 Mops/s
+      contention | retry/op N/B/F=0/10.5104/18.0928 | retry-limit/op=0/0/6.64e-06
+      ratio      | throughput F/N=27.54x | F/B=4802.41x | PASS
+    [15/16 writers] samples: 1 2 3 4  done
+      throughput | N=169.0 Kops/s | B=   931 ops/s | F= 4.36 Mops/s
+      contention | retry/op N/B/F=0/11.0690/19.8840 | retry-limit/op=0/0/6.97e-06
+      ratio      | throughput F/N=25.81x | F/B=4687.60x | PASS
+    [16/16 writers] samples: 1 2 3 4  done
+      throughput | N=159.5 Kops/s | B=   798 ops/s | F= 4.01 Mops/s
+      contention | retry/op N/B/F=0/11.2341/22.4234 | retry-limit/op=0/0/1.60e-05
+      ratio      | throughput F/N=25.15x | F/B=5029.75x | PASS
+
+  CASE 3/4 | N=10000 | K=4 | parent-pool=4 | 250 ms/backend/sample
+    [ 1/16 writers] samples: 1 2 3 4  done
+      throughput | N= 26.4 Kops/s | B= 24.8 Kops/s | F=17.56 Mops/s
+      contention | retry/op N/B/F=0/0/0 | retry-limit/op=0/0/0
+      ratio      | throughput F/N=664.18x | F/B=708.59x | PASS
+    [ 2/16 writers] samples: 1 2 3 4  done
+      throughput | N= 51.9 Kops/s | B= 49.8 Kops/s | F= 8.64 Mops/s
+      contention | retry/op N/B/F=0/0.0042/0.4978 | retry-limit/op=0/0/9.13e-07
+      ratio      | throughput F/N=166.32x | F/B=173.57x | PASS
+    [ 3/16 writers] samples: 1 2 3 4  done
+      throughput | N= 58.9 Kops/s | B=   835 ops/s | F= 7.82 Mops/s
+      contention | retry/op N/B/F=0/3.8624/1.5918 | retry-limit/op=0/0/3.29e-06
+      ratio      | throughput F/N=132.77x | F/B=9366.88x | PASS
+    [ 4/16 writers] samples: 1 2 3 4  done
+      throughput | N= 74.8 Kops/s | B=  1.2 Kops/s | F= 7.98 Mops/s
+      contention | retry/op N/B/F=0/3.6032/3.1812 | retry-limit/op=0/0/3.77e-06
+      ratio      | throughput F/N=106.81x | F/B=6624.22x | PASS
+    [ 5/16 writers] samples: 1 2 3 4  done
+      throughput | N= 90.2 Kops/s | B=   908 ops/s | F= 7.93 Mops/s
+      contention | retry/op N/B/F=0/4.7915/4.8901 | retry-limit/op=0/0/4.34e-06
+      ratio      | throughput F/N=87.92x | F/B=8736.18x | PASS
+    [ 6/16 writers] samples: 1 2 3 4  done
+      throughput | N=123.4 Kops/s | B=   776 ops/s | F= 7.33 Mops/s
+      contention | retry/op N/B/F=0/6.4758/7.2090 | retry-limit/op=0/0/4.64e-06
+      ratio      | throughput F/N=59.41x | F/B=9443.66x | PASS
+    [ 7/16 writers] samples: 1 2 3 4  done
+      throughput | N=127.4 Kops/s | B=   945 ops/s | F= 7.03 Mops/s
+      contention | retry/op N/B/F=0/6.1972/9.5215 | retry-limit/op=0/0/9.31e-06
+      ratio      | throughput F/N=55.22x | F/B=7440.59x | PASS
+    [ 8/16 writers] samples: 1 2 3 4  done
+      throughput | N=123.1 Kops/s | B=   926 ops/s | F= 6.18 Mops/s
+      contention | retry/op N/B/F=0/6.6286/9.8176 | retry-limit/op=0/0/9.59e-06
+      ratio      | throughput F/N=50.19x | F/B=6670.42x | PASS
+    [ 9/16 writers] samples: 1 2 3 4  done
+      throughput | N=126.9 Kops/s | B=   996 ops/s | F= 5.92 Mops/s
+      contention | retry/op N/B/F=0/7.5955/11.7174 | retry-limit/op=0/0/6.47e-06
+      ratio      | throughput F/N=46.69x | F/B=5945.06x | PASS
+    [10/16 writers] samples: 1 2 3 4  done
+      throughput | N=127.0 Kops/s | B=   737 ops/s | F= 5.60 Mops/s
+      contention | retry/op N/B/F=0/8.5407/13.5109 | retry-limit/op=0/0/1.31e-05
+      ratio      | throughput F/N=44.13x | F/B=7606.36x | PASS
+    [11/16 writers] samples: 1 2 3 4  done
+      throughput | N=130.2 Kops/s | B=   921 ops/s | F= 4.99 Mops/s
+      contention | retry/op N/B/F=0/8.5646/13.9622 | retry-limit/op=0/0/2.06e-05
+      ratio      | throughput F/N=38.31x | F/B=5417.07x | PASS
+    [12/16 writers] samples: 1 2 3 4  done
+      throughput | N=142.0 Kops/s | B=   855 ops/s | F= 4.99 Mops/s
+      contention | retry/op N/B/F=0/9.2417/15.6932 | retry-limit/op=0/0/4.43e-06
+      ratio      | throughput F/N=35.17x | F/B=5837.69x | PASS
+    [13/16 writers] samples: 1 2 3 4  done
+      throughput | N=148.2 Kops/s | B=   812 ops/s | F= 4.89 Mops/s
+      contention | retry/op N/B/F=0/10.0331/16.5920 | retry-limit/op=0/0/1.04e-05
+      ratio      | throughput F/N=33.00x | F/B=6026.88x | PASS
+    [14/16 writers] samples: 1 2 3 4  done
+      throughput | N=145.2 Kops/s | B=   932 ops/s | F= 4.57 Mops/s
+      contention | retry/op N/B/F=0/9.8109/17.2872 | retry-limit/op=0/0/5.31e-06
+      ratio      | throughput F/N=31.46x | F/B=4900.81x | PASS
+    [15/16 writers] samples: 1 2 3 4  done
+      throughput | N=159.3 Kops/s | B=   816 ops/s | F= 4.38 Mops/s
+      contention | retry/op N/B/F=0/12.0480/18.6685 | retry-limit/op=0/0/2.71e-06
+      ratio      | throughput F/N=27.49x | F/B=5368.72x | PASS
+    [16/16 writers] samples: 1 2 3 4  done
+      throughput | N=161.6 Kops/s | B=   919 ops/s | F= 4.23 Mops/s
+      contention | retry/op N/B/F=0/12.4567/21.4667 | retry-limit/op=0/0/6.65e-06
+      ratio      | throughput F/N=26.19x | F/B=4607.62x | PASS
+
+  CASE 4/4 | N=10000 | K=32 | parent-pool=4 | 250 ms/backend/sample
+    [ 1/16 writers] samples: 1 2 3 4  done
+      throughput | N= 22.9 Kops/s | B= 23.7 Kops/s | F=15.17 Mops/s
+      contention | retry/op N/B/F=0/0/0 | retry-limit/op=0/0/0
+      ratio      | throughput F/N=661.32x | F/B=639.26x | PASS
+    [ 2/16 writers] samples: 1 2 3 4  done
+      throughput | N= 48.7 Kops/s | B= 45.9 Kops/s | F= 8.22 Mops/s
+      contention | retry/op N/B/F=0/0.0022/0.4719 | retry-limit/op=0/0/6.07e-06
+      ratio      | throughput F/N=168.82x | F/B=179.14x | PASS
+    [ 3/16 writers] samples: 1 2 3 4  done
+      throughput | N= 61.9 Kops/s | B=  1.1 Kops/s | F= 7.60 Mops/s
+      contention | retry/op N/B/F=0/3.5331/1.6456 | retry-limit/op=0/0/4.22e-06
+      ratio      | throughput F/N=122.64x | F/B=6883.82x | PASS
+    [ 4/16 writers] samples: 1 2 3 4  done
+      throughput | N= 89.1 Kops/s | B=  1.2 Kops/s | F= 7.65 Mops/s
+      contention | retry/op N/B/F=0/4.8430/3.3463 | retry-limit/op=0/0/5.71e-06
+      ratio      | throughput F/N=85.92x | F/B=6253.13x | PASS
+    [ 5/16 writers] samples: 1 2 3 4  done
+      throughput | N=106.7 Kops/s | B=  1.1 Kops/s | F= 7.51 Mops/s
+      contention | retry/op N/B/F=0/6.2429/5.3564 | retry-limit/op=0/0/5.86e-06
+      ratio      | throughput F/N=70.36x | F/B=6686.70x | PASS
+    [ 6/16 writers] samples: 1 2 3 4  done
+      throughput | N=116.0 Kops/s | B=  1.2 Kops/s | F= 7.05 Mops/s
+      contention | retry/op N/B/F=0/5.6040/8.0418 | retry-limit/op=0/0/1.76e-05
+      ratio      | throughput F/N=60.74x | F/B=5947.53x | PASS
+    [ 7/16 writers] samples: 1 2 3 4  done
+      throughput | N=121.2 Kops/s | B=  1.3 Kops/s | F= 6.42 Mops/s
+      contention | retry/op N/B/F=0/6.7472/10.4775 | retry-limit/op=0/0/1.62e-05
+      ratio      | throughput F/N=53.03x | F/B=4968.43x | PASS
+    [ 8/16 writers] samples: 1 2 3 4  done
+      throughput | N=124.1 Kops/s | B=  1.1 Kops/s | F= 5.92 Mops/s
+      contention | retry/op N/B/F=0/6.9693/10.8016 | retry-limit/op=0/0/1.45e-05
+      ratio      | throughput F/N=47.68x | F/B=5327.70x | PASS
+    [ 9/16 writers] samples: 1 2 3 4  done
+      throughput | N=130.1 Kops/s | B=  1.0 Kops/s | F= 5.69 Mops/s
+      contention | retry/op N/B/F=0/9.1154/12.7891 | retry-limit/op=0/0/1.10e-05
+      ratio      | throughput F/N=43.75x | F/B=5441.12x | PASS
+    [10/16 writers] samples: 1 2 3 4  done
+      throughput | N=130.6 Kops/s | B=  1.2 Kops/s | F= 5.38 Mops/s
+      contention | retry/op N/B/F=0/8.3737/15.0583 | retry-limit/op=0/0/1.29e-05
+      ratio      | throughput F/N=41.15x | F/B=4657.44x | PASS
+    [11/16 writers] samples: 1 2 3 4  done
+      throughput | N=137.8 Kops/s | B=  1.0 Kops/s | F= 5.05 Mops/s
+      contention | retry/op N/B/F=0/8.6431/15.2783 | retry-limit/op=0/0/7.24e-06
+      ratio      | throughput F/N=36.66x | F/B=4966.88x | PASS
+    [12/16 writers] samples: 1 2 3 4  done
+      throughput | N=140.4 Kops/s | B=  1.1 Kops/s | F= 4.62 Mops/s
+      contention | retry/op N/B/F=0/10.8517/16.7776 | retry-limit/op=0/0/1.18e-05
+      ratio      | throughput F/N=32.95x | F/B=4077.72x | PASS
+    [13/16 writers] samples: 1 2 3 4  done
+      throughput | N=143.6 Kops/s | B=  1.2 Kops/s | F= 4.54 Mops/s
+      contention | retry/op N/B/F=0/10.6886/17.9347 | retry-limit/op=0/0/8.11e-06
+      ratio      | throughput F/N=31.63x | F/B=3839.67x | PASS
+    [14/16 writers] samples: 1 2 3 4  done
+      throughput | N=156.2 Kops/s | B=  1.2 Kops/s | F= 4.35 Mops/s
+      contention | retry/op N/B/F=0/10.2170/18.6350 | retry-limit/op=0/0/4.05e-06
+      ratio      | throughput F/N=27.84x | F/B=3740.46x | PASS
+    [15/16 writers] samples: 1 2 3 4  done
+      throughput | N=160.3 Kops/s | B=  1.1 Kops/s | F= 4.33 Mops/s
+      contention | retry/op N/B/F=0/10.0447/21.4374 | retry-limit/op=0/0/5.10e-06
+      ratio      | throughput F/N=26.99x | F/B=3833.12x | PASS
+    [16/16 writers] samples: 1 2 3 4  done
+      throughput | N=164.3 Kops/s | B=  1.0 Kops/s | F= 4.07 Mops/s
+      contention | retry/op N/B/F=0/13.0464/23.2172 | retry-limit/op=0/0/2.95e-06
+      ratio      | throughput F/N=24.77x | F/B=3876.80x | PASS
+
+TEST 2A OVERALL: PASS
+
+================================================================================
+TEST 2B - DISTRIBUTED STRUCTURAL MUTATION / FIXED-DURATION
+================================================================================
+Distributed-parent version of the same equal-time test. N/B/F use the same
+deterministic schedule; throughput and contention rates are reported separately.
+
+  CASE 1/4 | N=100 | K=4 | parent-pool=84 | 250 ms/backend/sample
+    [ 1/16 writers] samples: 1 2 3 4  done
+      throughput | N= 26.2 Kops/s | B= 25.1 Kops/s | F=17.46 Mops/s
+      contention | retry/op N/B/F=0/0/0 | retry-limit/op=0/0/0
+      ratio      | throughput F/N=667.10x | F/B=696.29x | PASS
+    [ 2/16 writers] samples: 1 2 3 4  done
+      throughput | N= 49.4 Kops/s | B= 46.9 Kops/s | F=18.81 Mops/s
+      contention | retry/op N/B/F=0/0.0104/0.0533 | retry-limit/op=0/0/3.17e-07
+      ratio      | throughput F/N=380.52x | F/B=400.78x | PASS
+    [ 3/16 writers] samples: 1 2 3 4  done
+      throughput | N= 77.5 Kops/s | B= 69.5 Kops/s | F=21.43 Mops/s
+      contention | retry/op N/B/F=0/0.0267/0.0712 | retry-limit/op=0/0/1.12e-06
+      ratio      | throughput F/N=276.59x | F/B=308.37x | PASS
+    [ 4/16 writers] samples: 1 2 3 4  done
+      throughput | N= 71.1 Kops/s | B= 65.1 Kops/s | F=27.73 Mops/s
+      contention | retry/op N/B/F=0/0.0598/0.1111 | retry-limit/op=0/0/2.17e-06
+      ratio      | throughput F/N=390.00x | F/B=425.74x | PASS
+    [ 5/16 writers] samples: 1 2 3 4  done
+      throughput | N= 90.5 Kops/s | B= 78.2 Kops/s | F=34.45 Mops/s
+      contention | retry/op N/B/F=0/0.0911/0.1191 | retry-limit/op=0/0/6.38e-07
+      ratio      | throughput F/N=380.69x | F/B=440.57x | PASS
+    [ 6/16 writers] samples: 1 2 3 4  done
+      throughput | N=117.3 Kops/s | B= 87.8 Kops/s | F=37.74 Mops/s
+      contention | retry/op N/B/F=0/0.1382/0.1578 | retry-limit/op=0/0/1.11e-06
+      ratio      | throughput F/N=321.66x | F/B=429.71x | PASS
+    [ 7/16 writers] samples: 1 2 3 4  done
+      throughput | N=123.4 Kops/s | B= 82.0 Kops/s | F=42.98 Mops/s
+      contention | retry/op N/B/F=0/0.2211/0.2285 | retry-limit/op=0/0/3.32e-06
+      ratio      | throughput F/N=348.38x | F/B=524.36x | PASS
+    [ 8/16 writers] samples: 1 2 3 4  done
+      throughput | N=128.5 Kops/s | B= 76.5 Kops/s | F=45.63 Mops/s
+      contention | retry/op N/B/F=0/0.3243/0.2315 | retry-limit/op=0/0/2.11e-06
+      ratio      | throughput F/N=355.00x | F/B=596.23x | PASS
+    [ 9/16 writers] samples: 1 2 3 4  done
+      throughput | N=132.3 Kops/s | B=103.5 Kops/s | F=49.76 Mops/s
+      contention | retry/op N/B/F=0/0.3374/0.2922 | retry-limit/op=0/0/2.21e-06
+      ratio      | throughput F/N=376.21x | F/B=480.78x | PASS
+    [10/16 writers] samples: 1 2 3 4  done
+      throughput | N=141.4 Kops/s | B=107.8 Kops/s | F=53.47 Mops/s
+      contention | retry/op N/B/F=0/0.4352/0.2808 | retry-limit/op=0/0/1.94e-06
+      ratio      | throughput F/N=378.02x | F/B=496.15x | PASS
+    [11/16 writers] samples: 1 2 3 4  done
+      throughput | N=154.2 Kops/s | B= 98.5 Kops/s | F=57.46 Mops/s
+      contention | retry/op N/B/F=0/0.6114/0.3081 | retry-limit/op=0/0/1.80e-06
+      ratio      | throughput F/N=372.61x | F/B=583.44x | PASS
+    [12/16 writers] samples: 1 2 3 4  done
+      throughput | N=161.5 Kops/s | B=106.0 Kops/s | F=60.66 Mops/s
+      contention | retry/op N/B/F=0/0.6741/0.3476 | retry-limit/op=0/0/1.63e-06
+      ratio      | throughput F/N=375.66x | F/B=572.44x | PASS
+    [13/16 writers] samples: 1 2 3 4  done
+      throughput | N=150.6 Kops/s | B= 95.6 Kops/s | F=59.69 Mops/s
+      contention | retry/op N/B/F=0/0.7996/0.3834 | retry-limit/op=0/0/2.35e-06
+      ratio      | throughput F/N=396.34x | F/B=624.32x | PASS
+    [14/16 writers] samples: 1 2 3 4  done
+      throughput | N=158.5 Kops/s | B= 90.9 Kops/s | F=61.65 Mops/s
+      contention | retry/op N/B/F=0/0.9241/0.4156 | retry-limit/op=0/0/2.94e-07
+      ratio      | throughput F/N=389.03x | F/B=678.56x | PASS
+    [15/16 writers] samples: 1 2 3 4  done
+      throughput | N=164.4 Kops/s | B= 77.5 Kops/s | F=63.65 Mops/s
+      contention | retry/op N/B/F=0/1.0111/0.4826 | retry-limit/op=0/0/9.42e-07
+      ratio      | throughput F/N=387.24x | F/B=821.44x | PASS
+    [16/16 writers] samples: 1 2 3 4  done
+      throughput | N=161.5 Kops/s | B= 63.1 Kops/s | F=64.41 Mops/s
+      contention | retry/op N/B/F=0/1.3755/0.4909 | retry-limit/op=0/0/2.61e-06
+      ratio      | throughput F/N=398.80x | F/B=1020.14x | PASS
+
+  CASE 2/4 | N=100 | K=32 | parent-pool=84 | 250 ms/backend/sample
+    [ 1/16 writers] samples: 1 2 3 4  done
+      throughput | N= 24.2 Kops/s | B= 23.1 Kops/s | F=13.34 Mops/s
+      contention | retry/op N/B/F=0/0/0 | retry-limit/op=0/0/0
+      ratio      | throughput F/N=551.85x | F/B=576.37x | PASS
+    [ 2/16 writers] samples: 1 2 3 4  done
+      throughput | N= 44.9 Kops/s | B= 46.2 Kops/s | F=15.00 Mops/s
+      contention | retry/op N/B/F=0/0.0141/0.0800 | retry-limit/op=0/0/1.47e-06
+      ratio      | throughput F/N=334.27x | F/B=324.98x | PASS
+    [ 3/16 writers] samples: 1 2 3 4  done
+      throughput | N= 66.7 Kops/s | B= 67.1 Kops/s | F=18.84 Mops/s
+      contention | retry/op N/B/F=0/0.0316/0.1080 | retry-limit/op=0/0/6.38e-07
+      ratio      | throughput F/N=282.57x | F/B=280.98x | PASS
+    [ 4/16 writers] samples: 1 2 3 4  done
+      throughput | N= 85.8 Kops/s | B= 65.8 Kops/s | F=24.41 Mops/s
+      contention | retry/op N/B/F=0/0.0743/0.1326 | retry-limit/op=0/0/2.22e-06
+      ratio      | throughput F/N=284.33x | F/B=370.69x | PASS
+    [ 5/16 writers] samples: 1 2 3 4  done
+      throughput | N= 90.7 Kops/s | B= 72.5 Kops/s | F=29.10 Mops/s
+      contention | retry/op N/B/F=0/0.1111/0.1403 | retry-limit/op=0/0/7.57e-07
+      ratio      | throughput F/N=320.80x | F/B=401.17x | PASS
+    [ 6/16 writers] samples: 1 2 3 4  done
+      throughput | N=119.0 Kops/s | B=102.7 Kops/s | F=32.43 Mops/s
+      contention | retry/op N/B/F=0/0.1202/0.2294 | retry-limit/op=0/0/1.54e-06
+      ratio      | throughput F/N=272.47x | F/B=315.68x | PASS
+    [ 7/16 writers] samples: 1 2 3 4  done
+      throughput | N=134.0 Kops/s | B= 96.9 Kops/s | F=37.06 Mops/s
+      contention | retry/op N/B/F=0/0.1915/0.2857 | retry-limit/op=0/0/3.22e-06
+      ratio      | throughput F/N=276.50x | F/B=382.45x | PASS
+    [ 8/16 writers] samples: 1 2 3 4  done
+      throughput | N=126.5 Kops/s | B= 87.7 Kops/s | F=38.64 Mops/s
+      contention | retry/op N/B/F=0/0.2841/0.2974 | retry-limit/op=0/0/2.89e-06
+      ratio      | throughput F/N=305.45x | F/B=440.48x | PASS
+    [ 9/16 writers] samples: 1 2 3 4  done
+      throughput | N=133.5 Kops/s | B= 96.7 Kops/s | F=41.47 Mops/s
+      contention | retry/op N/B/F=0/0.3669/0.3410 | retry-limit/op=0/0/3.08e-06
+      ratio      | throughput F/N=310.70x | F/B=428.97x | PASS
+    [10/16 writers] samples: 1 2 3 4  done
+      throughput | N=140.3 Kops/s | B=102.0 Kops/s | F=44.11 Mops/s
+      contention | retry/op N/B/F=0/0.4688/0.3799 | retry-limit/op=0/0/1.86e-06
+      ratio      | throughput F/N=314.34x | F/B=432.61x | PASS
+    [11/16 writers] samples: 1 2 3 4  done
+      throughput | N=131.9 Kops/s | B=100.3 Kops/s | F=43.95 Mops/s
+      contention | retry/op N/B/F=0/0.5578/0.4251 | retry-limit/op=0/0/1.90e-06
+      ratio      | throughput F/N=333.33x | F/B=438.38x | PASS
+    [12/16 writers] samples: 1 2 3 4  done
+      throughput | N=144.4 Kops/s | B= 95.8 Kops/s | F=48.80 Mops/s
+      contention | retry/op N/B/F=0/0.6918/0.4548 | retry-limit/op=0/0/1.84e-06
+      ratio      | throughput F/N=338.01x | F/B=509.20x | PASS
+    [13/16 writers] samples: 1 2 3 4  done
+      throughput | N=155.1 Kops/s | B= 97.3 Kops/s | F=51.20 Mops/s
+      contention | retry/op N/B/F=0/0.8417/0.5411 | retry-limit/op=0/0/1.85e-06
+      ratio      | throughput F/N=330.01x | F/B=526.34x | PASS
+    [14/16 writers] samples: 1 2 3 4  done
+      throughput | N=169.0 Kops/s | B= 95.4 Kops/s | F=55.93 Mops/s
+      contention | retry/op N/B/F=0/0.9371/0.4989 | retry-limit/op=0/0/9.66e-07
+      ratio      | throughput F/N=330.89x | F/B=585.92x | PASS
+    [15/16 writers] samples: 1 2 3 4  done
+      throughput | N=157.8 Kops/s | B= 99.6 Kops/s | F=56.87 Mops/s
+      contention | retry/op N/B/F=0/1.0393/0.5648 | retry-limit/op=0/0/1.23e-06
+      ratio      | throughput F/N=360.36x | F/B=571.16x | PASS
+    [16/16 writers] samples: 1 2 3 4  done
+      throughput | N=169.4 Kops/s | B= 85.8 Kops/s | F=57.76 Mops/s
+      contention | retry/op N/B/F=0/1.2805/0.6192 | retry-limit/op=0/0/2.66e-06
+      ratio      | throughput F/N=341.03x | F/B=672.96x | PASS
+
+  CASE 3/4 | N=10000 | K=4 | parent-pool=100 | 250 ms/backend/sample
+    [ 1/16 writers] samples: 1 2 3 4  done
+      throughput | N= 25.7 Kops/s | B= 24.5 Kops/s | F=17.19 Mops/s
+      contention | retry/op N/B/F=0/0/0 | retry-limit/op=0/0/0
+      ratio      | throughput F/N=669.61x | F/B=700.63x | PASS
+    [ 2/16 writers] samples: 1 2 3 4  done
+      throughput | N= 51.7 Kops/s | B= 49.6 Kops/s | F=19.04 Mops/s
+      contention | retry/op N/B/F=0/0.0098/0.0373 | retry-limit/op=0/0/9.45e-07
+      ratio      | throughput F/N=368.03x | F/B=383.59x | PASS
+    [ 3/16 writers] samples: 1 2 3 4  done
+      throughput | N= 73.6 Kops/s | B= 61.6 Kops/s | F=21.44 Mops/s
+      contention | retry/op N/B/F=0/0.0214/0.0613 | retry-limit/op=0/0/8.38e-07
+      ratio      | throughput F/N=291.39x | F/B=348.33x | PASS
+    [ 4/16 writers] samples: 1 2 3 4  done
+      throughput | N= 73.6 Kops/s | B= 66.8 Kops/s | F=27.84 Mops/s
+      contention | retry/op N/B/F=0/0.0614/0.0879 | retry-limit/op=0/0/5.74e-07
+      ratio      | throughput F/N=378.47x | F/B=416.72x | PASS
+    [ 5/16 writers] samples: 1 2 3 4  done
+      throughput | N= 89.5 Kops/s | B= 73.6 Kops/s | F=34.00 Mops/s
+      contention | retry/op N/B/F=0/0.0840/0.1067 | retry-limit/op=0/0/1.12e-06
+      ratio      | throughput F/N=379.81x | F/B=462.14x | PASS
+    [ 6/16 writers] samples: 1 2 3 4  done
+      throughput | N=127.8 Kops/s | B= 94.2 Kops/s | F=38.58 Mops/s
+      contention | retry/op N/B/F=0/0.0906/0.1639 | retry-limit/op=0/0/1.24e-06
+      ratio      | throughput F/N=301.97x | F/B=409.70x | PASS
+    [ 7/16 writers] samples: 1 2 3 4  done
+      throughput | N=130.2 Kops/s | B=114.7 Kops/s | F=46.12 Mops/s
+      contention | retry/op N/B/F=0/0.1257/0.1846 | retry-limit/op=0/0/1.94e-06
+      ratio      | throughput F/N=354.32x | F/B=402.01x | PASS
+    [ 8/16 writers] samples: 1 2 3 4  done
+      throughput | N=141.4 Kops/s | B=112.4 Kops/s | F=49.96 Mops/s
+      contention | retry/op N/B/F=0/0.2153/0.1869 | retry-limit/op=0/0/1.75e-06
+      ratio      | throughput F/N=353.27x | F/B=444.34x | PASS
+    [ 9/16 writers] samples: 1 2 3 4  done
+      throughput | N=138.5 Kops/s | B=114.5 Kops/s | F=53.38 Mops/s
+      contention | retry/op N/B/F=0/0.2875/0.2482 | retry-limit/op=0/0/3.15e-06
+      ratio      | throughput F/N=385.29x | F/B=466.39x | PASS
+    [10/16 writers] samples: 1 2 3 4  done
+      throughput | N=140.0 Kops/s | B=101.7 Kops/s | F=54.39 Mops/s
+      contention | retry/op N/B/F=0/0.3914/0.2575 | retry-limit/op=0/0/2.17e-06
+      ratio      | throughput F/N=388.37x | F/B=534.65x | PASS
+    [11/16 writers] samples: 1 2 3 4  done
+      throughput | N=145.5 Kops/s | B=108.6 Kops/s | F=56.42 Mops/s
+      contention | retry/op N/B/F=0/0.4766/0.2963 | retry-limit/op=0/0/2.34e-06
+      ratio      | throughput F/N=387.89x | F/B=519.65x | PASS
+    [12/16 writers] samples: 1 2 3 4  done
+      throughput | N=147.3 Kops/s | B=111.7 Kops/s | F=59.02 Mops/s
+      contention | retry/op N/B/F=0/0.6169/0.3201 | retry-limit/op=0/0/2.62e-06
+      ratio      | throughput F/N=400.70x | F/B=528.53x | PASS
+    [13/16 writers] samples: 1 2 3 4  done
+      throughput | N=151.2 Kops/s | B=108.8 Kops/s | F=61.96 Mops/s
+      contention | retry/op N/B/F=0/0.7404/0.3333 | retry-limit/op=0/0/1.29e-06
+      ratio      | throughput F/N=409.87x | F/B=569.47x | PASS
+    [14/16 writers] samples: 1 2 3 4  done
+      throughput | N=158.1 Kops/s | B= 98.3 Kops/s | F=64.35 Mops/s
+      contention | retry/op N/B/F=0/0.8185/0.3633 | retry-limit/op=0/0/1.28e-06
+      ratio      | throughput F/N=406.92x | F/B=654.66x | PASS
+    [15/16 writers] samples: 1 2 3 4  done
+      throughput | N=162.4 Kops/s | B= 97.3 Kops/s | F=65.84 Mops/s
+      contention | retry/op N/B/F=0/0.9226/0.3994 | retry-limit/op=0/0/9.26e-07
+      ratio      | throughput F/N=405.34x | F/B=676.39x | PASS
+    [16/16 writers] samples: 1 2 3 4  done
+      throughput | N=160.4 Kops/s | B=103.1 Kops/s | F=65.95 Mops/s
+      contention | retry/op N/B/F=0/1.0860/0.4518 | retry-limit/op=0/0/6.39e-07
+      ratio      | throughput F/N=411.08x | F/B=639.35x | PASS
+
+  CASE 4/4 | N=10000 | K=32 | parent-pool=100 | 250 ms/backend/sample
+    [ 1/16 writers] samples: 1 2 3 4  done
+      throughput | N= 23.2 Kops/s | B= 24.3 Kops/s | F=13.84 Mops/s
+      contention | retry/op N/B/F=0/0/0 | retry-limit/op=0/0/0
+      ratio      | throughput F/N=595.53x | F/B=569.43x | PASS
+    [ 2/16 writers] samples: 1 2 3 4  done
+      throughput | N= 53.0 Kops/s | B= 48.7 Kops/s | F=15.92 Mops/s
+      contention | retry/op N/B/F=0/0.0084/0.0598 | retry-limit/op=0/0/1.02e-06
+      ratio      | throughput F/N=300.42x | F/B=326.91x | PASS
+    [ 3/16 writers] samples: 1 2 3 4  done
+      throughput | N= 77.2 Kops/s | B= 70.0 Kops/s | F=19.50 Mops/s
+      contention | retry/op N/B/F=0/0.0226/0.0634 | retry-limit/op=0/0/1.03e-06
+      ratio      | throughput F/N=252.52x | F/B=278.40x | PASS
+    [ 4/16 writers] samples: 1 2 3 4  done
+      throughput | N= 92.4 Kops/s | B= 69.2 Kops/s | F=23.82 Mops/s
+      contention | retry/op N/B/F=0/0.0469/0.0959 | retry-limit/op=0/0/1.09e-06
+      ratio      | throughput F/N=257.85x | F/B=344.04x | PASS
+    [ 5/16 writers] samples: 1 2 3 4  done
+      throughput | N= 91.1 Kops/s | B= 82.1 Kops/s | F=29.68 Mops/s
+      contention | retry/op N/B/F=0/0.0795/0.1305 | retry-limit/op=0/0/7.42e-07
+      ratio      | throughput F/N=325.86x | F/B=361.43x | PASS
+    [ 6/16 writers] samples: 1 2 3 4  done
+      throughput | N=118.2 Kops/s | B=102.1 Kops/s | F=33.35 Mops/s
+      contention | retry/op N/B/F=0/0.0930/0.1617 | retry-limit/op=0/0/1.31e-06
+      ratio      | throughput F/N=282.12x | F/B=326.55x | PASS
+    [ 7/16 writers] samples: 1 2 3 4  done
+      throughput | N=131.8 Kops/s | B=114.3 Kops/s | F=36.85 Mops/s
+      contention | retry/op N/B/F=0/0.1297/0.2883 | retry-limit/op=0/0/3.64e-06
+      ratio      | throughput F/N=279.57x | F/B=322.34x | PASS
+    [ 8/16 writers] samples: 1 2 3 4  done
+      throughput | N=136.1 Kops/s | B=112.6 Kops/s | F=39.87 Mops/s
+      contention | retry/op N/B/F=0/0.2005/0.2344 | retry-limit/op=0/0/1.10e-06
+      ratio      | throughput F/N=292.85x | F/B=353.95x | PASS
+    [ 9/16 writers] samples: 1 2 3 4  done
+      throughput | N=133.4 Kops/s | B=103.2 Kops/s | F=41.65 Mops/s
+      contention | retry/op N/B/F=0/0.2933/0.3366 | retry-limit/op=0/0/3.29e-06
+      ratio      | throughput F/N=312.12x | F/B=403.47x | PASS
+    [10/16 writers] samples: 1 2 3 4  done
+      throughput | N=127.6 Kops/s | B= 96.0 Kops/s | F=43.34 Mops/s
+      contention | retry/op N/B/F=0/0.3799/0.3248 | retry-limit/op=0/0/3.14e-06
+      ratio      | throughput F/N=339.69x | F/B=451.48x | PASS
+    [11/16 writers] samples: 1 2 3 4  done
+      throughput | N=146.0 Kops/s | B=100.7 Kops/s | F=47.79 Mops/s
+      contention | retry/op N/B/F=0/0.5100/0.3230 | retry-limit/op=0/0/2.35e-06
+      ratio      | throughput F/N=327.36x | F/B=474.53x | PASS
+    [12/16 writers] samples: 1 2 3 4  done
+      throughput | N=153.6 Kops/s | B=119.8 Kops/s | F=50.72 Mops/s
+      contention | retry/op N/B/F=0/0.5449/0.3905 | retry-limit/op=0/0/8.66e-06
+      ratio      | throughput F/N=330.15x | F/B=423.24x | PASS
+    [13/16 writers] samples: 1 2 3 4  done
+      throughput | N=163.8 Kops/s | B=119.5 Kops/s | F=57.44 Mops/s
+      contention | retry/op N/B/F=0/0.6580/0.3866 | retry-limit/op=0/0/2.51e-06
+      ratio      | throughput F/N=350.70x | F/B=480.87x | PASS
+    [14/16 writers] samples: 1 2 3 4  done
+      throughput | N=162.8 Kops/s | B=101.3 Kops/s | F=56.89 Mops/s
+      contention | retry/op N/B/F=0/0.8946/0.3984 | retry-limit/op=0/0/1.99e-06
+      ratio      | throughput F/N=349.38x | F/B=561.39x | PASS
+    [15/16 writers] samples: 1 2 3 4  done
+      throughput | N=164.1 Kops/s | B=101.4 Kops/s | F=58.00 Mops/s
+      contention | retry/op N/B/F=0/0.9260/0.4880 | retry-limit/op=0/0/1.28e-06
+      ratio      | throughput F/N=353.36x | F/B=571.84x | PASS
+    [16/16 writers] samples: 1 2 3 4  done
+      throughput | N=161.7 Kops/s | B= 99.2 Kops/s | F=55.90 Mops/s
+      contention | retry/op N/B/F=0/1.1066/0.8328 | retry-limit/op=0/0/2.31e-05
+      ratio      | throughput F/N=345.70x | F/B=563.47x | PASS
+
+TEST 2B OVERALL: PASS
+
+TEST 2 OVERALL: PASS
+
+================================================================================
+TEST 3A - HOTSPOT STABLE READS + TWO WRITERS / FIXED-DURATION
+================================================================================
+Equal read/write interval for all backends. N=LG-native, B=LG-bidir, F=Fabric.
+Both LiveGraph modes use a fresh MVCC snapshot/read; Fabric uses its public
+sequence-validated stable read. Retry-limit events are reported, not hidden.
+
+  CASE 1/4 | N=100 | K=4 | parent-pool=4 | 250 ms/backend/sample
+    [ 1/16 readers] samples: 1 2 3 4  done
+      reads      | N= 3.85 Mops/s | B= 3.91 Mops/s | F=18.98 Mops/s
+      writers    | N= 33.5 Kops/s | B= 30.2 Kops/s | F=19.71 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.2689 | read-limit/op=0/0/1.21e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=4.93x | F/B=4.86x | PASS
+    [ 2/16 readers] samples: 1 2 3 4  done
+      reads      | N= 7.77 Mops/s | B= 8.01 Mops/s | F=24.37 Mops/s
+      writers    | N= 22.6 Kops/s | B= 24.2 Kops/s | F=15.60 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.2453 | read-limit/op=0/0/1.07e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=3.14x | F/B=3.04x | PASS
+    [ 3/16 readers] samples: 1 2 3 4  done
+      reads      | N=10.87 Mops/s | B=12.13 Mops/s | F=35.75 Mops/s
+      writers    | N= 26.5 Kops/s | B= 26.3 Kops/s | F=14.22 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.2410 | read-limit/op=0/0/1.21e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=3.29x | F/B=2.95x | PASS
+    [ 4/16 readers] samples: 1 2 3 4  done
+      reads      | N=12.44 Mops/s | B=14.25 Mops/s | F=38.74 Mops/s
+      writers    | N= 32.0 Kops/s | B= 27.4 Kops/s | F=13.04 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.2273 | read-limit/op=0/0/1.03e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=3.11x | F/B=2.72x | PASS
+    [ 5/16 readers] samples: 1 2 3 4  done
+      reads      | N=17.23 Mops/s | B=16.38 Mops/s | F=45.68 Mops/s
+      writers    | N= 27.2 Kops/s | B= 28.3 Kops/s | F=11.76 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.3465 | read-limit/op=0/0/1.18e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.65x | F/B=2.79x | PASS
+    [ 6/16 readers] samples: 1 2 3 4  done
+      reads      | N=22.28 Mops/s | B=22.66 Mops/s | F=49.08 Mops/s
+      writers    | N= 25.0 Kops/s | B= 25.4 Kops/s | F=11.58 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.3817 | read-limit/op=0/0/1.75e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.20x | F/B=2.17x | PASS
+    [ 7/16 readers] samples: 1 2 3 4  done
+      reads      | N=26.39 Mops/s | B=26.88 Mops/s | F=49.72 Mops/s
+      writers    | N= 25.8 Kops/s | B= 25.3 Kops/s | F=11.78 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.4978 | read-limit/op=0/0/1.13e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.88x | F/B=1.85x | PASS
+    [ 8/16 readers] samples: 1 2 3 4  done
+      reads      | N=29.10 Mops/s | B=29.88 Mops/s | F=49.13 Mops/s
+      writers    | N= 24.9 Kops/s | B= 24.4 Kops/s | F=11.28 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.5938 | read-limit/op=0/0/1.43e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.69x | F/B=1.64x | PASS
+    [ 9/16 readers] samples: 1 2 3 4  done
+      reads      | N=30.23 Mops/s | B=31.82 Mops/s | F=52.47 Mops/s
+      writers    | N= 23.2 Kops/s | B= 23.0 Kops/s | F= 9.97 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.7435 | read-limit/op=0/0/2.49e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.74x | F/B=1.65x | PASS
+    [10/16 readers] samples: 1 2 3 4  done
+      reads      | N=33.16 Mops/s | B=33.90 Mops/s | F=49.92 Mops/s
+      writers    | N= 23.9 Kops/s | B= 22.9 Kops/s | F= 9.47 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.8272 | read-limit/op=0/0/1.44e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.51x | F/B=1.47x | PASS
+    [11/16 readers] samples: 1 2 3 4  done
+      reads      | N=35.21 Mops/s | B=36.00 Mops/s | F=51.91 Mops/s
+      writers    | N= 23.9 Kops/s | B= 23.0 Kops/s | F= 9.28 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.8488 | read-limit/op=0/0/9.52e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.47x | F/B=1.44x | PASS
+    [12/16 readers] samples: 1 2 3 4  done
+      reads      | N=37.83 Mops/s | B=39.04 Mops/s | F=56.98 Mops/s
+      writers    | N= 23.4 Kops/s | B= 21.9 Kops/s | F= 8.97 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.8978 | read-limit/op=0/0/2.81e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.51x | F/B=1.46x | PASS
+    [13/16 readers] samples: 1 2 3 4  done
+      reads      | N=41.23 Mops/s | B=41.06 Mops/s | F=63.23 Mops/s
+      writers    | N= 23.1 Kops/s | B= 22.5 Kops/s | F= 8.53 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.9301 | read-limit/op=0/0/4.87e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.53x | F/B=1.54x | PASS
+    [14/16 readers] samples: 1 2 3 4  done
+      reads      | N=43.89 Mops/s | B=44.57 Mops/s | F=65.27 Mops/s
+      writers    | N= 23.3 Kops/s | B= 22.0 Kops/s | F= 8.60 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.9176 | read-limit/op=0/0/7.34e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.49x | F/B=1.46x | PASS
+    [15/16 readers] samples: 1 2 3 4  done
+      reads      | N=45.02 Mops/s | B=46.06 Mops/s | F=60.75 Mops/s
+      writers    | N= 22.9 Kops/s | B= 21.2 Kops/s | F= 8.35 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.0821 | read-limit/op=0/0/1.96e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.35x | F/B=1.32x | PASS
+    [16/16 readers] samples: 1 2 3 4  done
+      reads      | N=48.06 Mops/s | B=48.77 Mops/s | F=59.49 Mops/s
+      writers    | N= 18.5 Kops/s | B= 16.5 Kops/s | F= 7.89 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.2207 | read-limit/op=0/0/5.08e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.24x | F/B=1.22x | PASS
+
+  CASE 2/4 | N=100 | K=32 | parent-pool=4 | 250 ms/backend/sample
+    [ 1/16 readers] samples: 1 2 3 4  done
+      reads      | N= 3.89 Mops/s | B= 3.66 Mops/s | F=11.34 Mops/s
+      writers    | N= 31.9 Kops/s | B= 31.6 Kops/s | F=18.08 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.5084 | read-limit/op=0/0/4.59e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.91x | F/B=3.10x | PASS
+    [ 2/16 readers] samples: 1 2 3 4  done
+      reads      | N= 7.79 Mops/s | B= 8.01 Mops/s | F=18.69 Mops/s
+      writers    | N= 26.1 Kops/s | B= 24.5 Kops/s | F=15.00 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.5641 | read-limit/op=0/0/4.95e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.40x | F/B=2.33x | PASS
+    [ 3/16 readers] samples: 1 2 3 4  done
+      reads      | N=10.92 Mops/s | B=10.61 Mops/s | F=26.83 Mops/s
+      writers    | N= 30.4 Kops/s | B= 31.3 Kops/s | F=13.83 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.5904 | read-limit/op=0/0/3.12e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.46x | F/B=2.53x | PASS
+    [ 4/16 readers] samples: 1 2 3 4  done
+      reads      | N=13.68 Mops/s | B=13.29 Mops/s | F=27.66 Mops/s
+      writers    | N= 29.8 Kops/s | B= 31.5 Kops/s | F=12.62 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.7103 | read-limit/op=0/0/3.43e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.02x | F/B=2.08x | PASS
+    [ 5/16 readers] samples: 1 2 3 4  done
+      reads      | N=17.73 Mops/s | B=17.48 Mops/s | F=32.10 Mops/s
+      writers    | N= 26.4 Kops/s | B= 29.3 Kops/s | F=11.91 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.8980 | read-limit/op=0/0/3.44e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.81x | F/B=1.84x | PASS
+    [ 6/16 readers] samples: 1 2 3 4  done
+      reads      | N=22.02 Mops/s | B=22.66 Mops/s | F=31.75 Mops/s
+      writers    | N= 24.7 Kops/s | B= 24.6 Kops/s | F=10.61 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.0479 | read-limit/op=0/0/2.73e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.44x | F/B=1.40x | PASS
+    [ 7/16 readers] samples: 1 2 3 4  done
+      reads      | N=24.77 Mops/s | B=25.34 Mops/s | F=31.98 Mops/s
+      writers    | N= 24.6 Kops/s | B= 23.6 Kops/s | F=10.25 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.1617 | read-limit/op=0/0/3.02e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.29x | F/B=1.26x | PASS
+    [ 8/16 readers] samples: 1 2 3 4  done
+      reads      | N=27.03 Mops/s | B=27.56 Mops/s | F=32.23 Mops/s
+      writers    | N= 23.9 Kops/s | B= 23.2 Kops/s | F= 9.65 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.2617 | read-limit/op=0/0/2.67e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.19x | F/B=1.17x | PASS
+    [ 9/16 readers] samples: 1 2 3 4  done
+      reads      | N=29.57 Mops/s | B=30.69 Mops/s | F=36.85 Mops/s
+      writers    | N= 23.1 Kops/s | B= 23.4 Kops/s | F= 8.99 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.4121 | read-limit/op=0/0/2.76e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.25x | F/B=1.20x | PASS
+    [10/16 readers] samples: 1 2 3 4  done
+      reads      | N=33.52 Mops/s | B=33.51 Mops/s | F=37.52 Mops/s
+      writers    | N= 23.7 Kops/s | B= 23.0 Kops/s | F= 8.72 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.4698 | read-limit/op=0/0/1.27e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.12x | F/B=1.12x | PASS
+    [11/16 readers] samples: 1 2 3 4  done
+      reads      | N=35.42 Mops/s | B=35.40 Mops/s | F=38.10 Mops/s
+      writers    | N= 23.3 Kops/s | B= 22.3 Kops/s | F= 8.43 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.5312 | read-limit/op=0/0/1.53e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.08x | F/B=1.08x | PASS
+    [12/16 readers] samples: 1 2 3 4  done
+      reads      | N=38.31 Mops/s | B=38.24 Mops/s | F=43.30 Mops/s
+      writers    | N= 22.9 Kops/s | B= 21.9 Kops/s | F= 8.18 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.5240 | read-limit/op=0/0/1.19e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.13x | F/B=1.13x | PASS
+    [13/16 readers] samples: 1 2 3 4  done
+      reads      | N=40.08 Mops/s | B=40.46 Mops/s | F=47.04 Mops/s
+      writers    | N= 22.7 Kops/s | B= 21.7 Kops/s | F= 7.86 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.6448 | read-limit/op=0/0/8.48e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.17x | F/B=1.16x | PASS
+    [14/16 readers] samples: 1 2 3 4  done
+      reads      | N=42.65 Mops/s | B=43.62 Mops/s | F=48.47 Mops/s
+      writers    | N= 22.2 Kops/s | B= 22.1 Kops/s | F= 7.67 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.6332 | read-limit/op=0/0/8.34e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.14x | F/B=1.11x | PASS
+    [15/16 readers] samples: 1 2 3 4  done
+      reads      | N=44.61 Mops/s | B=45.38 Mops/s | F=48.76 Mops/s
+      writers    | N= 22.1 Kops/s | B= 21.7 Kops/s | F= 7.67 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.6490 | read-limit/op=0/0/1.30e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.09x | F/B=1.07x | PASS
+    [16/16 readers] samples: 1 2 3 4  done
+      reads      | N=47.18 Mops/s | B=48.14 Mops/s | F=53.74 Mops/s
+      writers    | N= 19.7 Kops/s | B= 17.8 Kops/s | F= 7.54 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.6176 | read-limit/op=0/0/1.32e-05 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.14x | F/B=1.12x | PASS
+
+  CASE 3/4 | N=10000 | K=4 | parent-pool=4 | 250 ms/backend/sample
+    [ 1/16 readers] samples: 1 2 3 4  done
+      reads      | N= 3.92 Mops/s | B= 3.86 Mops/s | F=13.61 Mops/s
+      writers    | N= 32.9 Kops/s | B= 29.6 Kops/s | F=20.33 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.5389 | read-limit/op=0/0/3.41e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=3.47x | F/B=3.53x | PASS
+    [ 2/16 readers] samples: 1 2 3 4  done
+      reads      | N= 8.11 Mops/s | B= 7.88 Mops/s | F=23.53 Mops/s
+      writers    | N= 23.4 Kops/s | B= 24.4 Kops/s | F=16.05 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.3396 | read-limit/op=0/0/4.20e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.90x | F/B=2.99x | PASS
+    [ 3/16 readers] samples: 1 2 3 4  done
+      reads      | N=10.47 Mops/s | B=10.79 Mops/s | F=29.30 Mops/s
+      writers    | N= 30.6 Kops/s | B= 30.0 Kops/s | F=14.93 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.2350 | read-limit/op=0/0/1.33e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.80x | F/B=2.72x | PASS
+    [ 4/16 readers] samples: 1 2 3 4  done
+      reads      | N=13.08 Mops/s | B=13.86 Mops/s | F=39.36 Mops/s
+      writers    | N= 33.3 Kops/s | B= 29.9 Kops/s | F=13.48 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.2638 | read-limit/op=0/0/1.92e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=3.01x | F/B=2.84x | PASS
+    [ 5/16 readers] samples: 1 2 3 4  done
+      reads      | N=17.60 Mops/s | B=18.27 Mops/s | F=44.45 Mops/s
+      writers    | N= 29.1 Kops/s | B= 28.1 Kops/s | F=12.25 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.4182 | read-limit/op=0/0/2.80e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.53x | F/B=2.43x | PASS
+    [ 6/16 readers] samples: 1 2 3 4  done
+      reads      | N=21.91 Mops/s | B=22.27 Mops/s | F=44.19 Mops/s
+      writers    | N= 25.5 Kops/s | B= 24.4 Kops/s | F=11.40 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.4916 | read-limit/op=0/0/2.71e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.02x | F/B=1.98x | PASS
+    [ 7/16 readers] samples: 1 2 3 4  done
+      reads      | N=24.76 Mops/s | B=25.76 Mops/s | F=47.42 Mops/s
+      writers    | N= 24.8 Kops/s | B= 23.9 Kops/s | F=11.22 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.4791 | read-limit/op=0/0/7.37e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.92x | F/B=1.84x | PASS
+    [ 8/16 readers] samples: 1 2 3 4  done
+      reads      | N=27.68 Mops/s | B=28.28 Mops/s | F=41.43 Mops/s
+      writers    | N= 24.4 Kops/s | B= 23.3 Kops/s | F=10.24 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.7043 | read-limit/op=0/0/7.09e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.50x | F/B=1.47x | PASS
+    [ 9/16 readers] samples: 1 2 3 4  done
+      reads      | N=30.48 Mops/s | B=31.24 Mops/s | F=49.86 Mops/s
+      writers    | N= 24.1 Kops/s | B= 23.2 Kops/s | F= 9.95 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.7230 | read-limit/op=0/0/1.08e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.64x | F/B=1.60x | PASS
+    [10/16 readers] samples: 1 2 3 4  done
+      reads      | N=32.87 Mops/s | B=33.52 Mops/s | F=47.01 Mops/s
+      writers    | N= 24.2 Kops/s | B= 23.1 Kops/s | F= 9.39 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.8902 | read-limit/op=0/0/5.72e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.43x | F/B=1.40x | PASS
+    [11/16 readers] samples: 1 2 3 4  done
+      reads      | N=35.65 Mops/s | B=35.83 Mops/s | F=47.27 Mops/s
+      writers    | N= 23.4 Kops/s | B= 22.4 Kops/s | F= 8.97 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.9880 | read-limit/op=0/0/7.34e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.33x | F/B=1.32x | PASS
+    [12/16 readers] samples: 1 2 3 4  done
+      reads      | N=38.44 Mops/s | B=38.95 Mops/s | F=51.89 Mops/s
+      writers    | N= 23.7 Kops/s | B= 22.2 Kops/s | F= 8.67 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.0126 | read-limit/op=0/0/9.78e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.35x | F/B=1.33x | PASS
+    [13/16 readers] samples: 1 2 3 4  done
+      reads      | N=41.22 Mops/s | B=41.88 Mops/s | F=63.22 Mops/s
+      writers    | N= 22.6 Kops/s | B= 22.0 Kops/s | F= 8.60 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.9400 | read-limit/op=0/0/9.77e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.53x | F/B=1.51x | PASS
+    [14/16 readers] samples: 1 2 3 4  done
+      reads      | N=43.57 Mops/s | B=44.52 Mops/s | F=61.78 Mops/s
+      writers    | N= 23.1 Kops/s | B= 22.1 Kops/s | F= 8.33 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.9951 | read-limit/op=0/0/3.90e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.42x | F/B=1.39x | PASS
+    [15/16 readers] samples: 1 2 3 4  done
+      reads      | N=45.73 Mops/s | B=45.79 Mops/s | F=62.65 Mops/s
+      writers    | N= 22.3 Kops/s | B= 22.4 Kops/s | F= 8.34 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.0210 | read-limit/op=0/0/3.33e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.37x | F/B=1.37x | PASS
+    [16/16 readers] samples: 1 2 3 4  done
+      reads      | N=47.56 Mops/s | B=48.50 Mops/s | F=61.96 Mops/s
+      writers    | N= 19.0 Kops/s | B= 20.4 Kops/s | F= 8.02 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.1422 | read-limit/op=0/0/2.56e-05 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.30x | F/B=1.28x | PASS
+
+  CASE 4/4 | N=10000 | K=32 | parent-pool=4 | 250 ms/backend/sample
+    [ 1/16 readers] samples: 1 2 3 4  done
+      reads      | N= 4.23 Mops/s | B= 3.94 Mops/s | F=11.33 Mops/s
+      writers    | N= 26.0 Kops/s | B= 30.1 Kops/s | F=18.49 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.4930 | read-limit/op=0/0/5.58e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.68x | F/B=2.88x | PASS
+    [ 2/16 readers] samples: 1 2 3 4  done
+      reads      | N= 7.09 Mops/s | B= 7.47 Mops/s | F=19.06 Mops/s
+      writers    | N= 29.3 Kops/s | B= 24.2 Kops/s | F=15.12 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.5916 | read-limit/op=0/0/7.99e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.69x | F/B=2.55x | PASS
+    [ 3/16 readers] samples: 1 2 3 4  done
+      reads      | N=11.03 Mops/s | B=11.62 Mops/s | F=25.46 Mops/s
+      writers    | N= 30.3 Kops/s | B= 27.2 Kops/s | F=13.63 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.5976 | read-limit/op=0/0/3.38e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.31x | F/B=2.19x | PASS
+    [ 4/16 readers] samples: 1 2 3 4  done
+      reads      | N=13.30 Mops/s | B=13.53 Mops/s | F=27.56 Mops/s
+      writers    | N= 31.6 Kops/s | B= 31.4 Kops/s | F=12.52 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.7009 | read-limit/op=0/0/2.76e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.07x | F/B=2.04x | PASS
+    [ 5/16 readers] samples: 1 2 3 4  done
+      reads      | N=18.08 Mops/s | B=18.56 Mops/s | F=31.35 Mops/s
+      writers    | N= 28.6 Kops/s | B= 27.9 Kops/s | F=11.83 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.9022 | read-limit/op=0/0/2.45e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.73x | F/B=1.69x | PASS
+    [ 6/16 readers] samples: 1 2 3 4  done
+      reads      | N=21.84 Mops/s | B=22.20 Mops/s | F=32.55 Mops/s
+      writers    | N= 26.0 Kops/s | B= 25.0 Kops/s | F=10.75 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.0179 | read-limit/op=0/0/3.75e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.49x | F/B=1.47x | PASS
+    [ 7/16 readers] samples: 1 2 3 4  done
+      reads      | N=25.02 Mops/s | B=24.97 Mops/s | F=32.36 Mops/s
+      writers    | N= 25.2 Kops/s | B= 23.4 Kops/s | F=10.33 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.1062 | read-limit/op=0/0/3.15e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.29x | F/B=1.30x | PASS
+    [ 8/16 readers] samples: 1 2 3 4  done
+      reads      | N=27.00 Mops/s | B=28.13 Mops/s | F=32.45 Mops/s
+      writers    | N= 23.8 Kops/s | B= 23.2 Kops/s | F= 9.65 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.2364 | read-limit/op=0/0/1.10e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.20x | F/B=1.15x | PASS
+    [ 9/16 readers] samples: 1 2 3 4  done
+      reads      | N=30.87 Mops/s | B=31.46 Mops/s | F=37.33 Mops/s
+      writers    | N= 24.1 Kops/s | B= 23.3 Kops/s | F= 9.18 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.3718 | read-limit/op=0/0/2.53e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.21x | F/B=1.19x | PASS
+    [10/16 readers] samples: 1 2 3 4  done
+      reads      | N=33.10 Mops/s | B=33.84 Mops/s | F=37.91 Mops/s
+      writers    | N= 23.6 Kops/s | B= 23.2 Kops/s | F= 8.67 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.4370 | read-limit/op=0/0/1.75e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.15x | F/B=1.12x | PASS
+    [11/16 readers] samples: 1 2 3 4  done
+      reads      | N=35.21 Mops/s | B=36.33 Mops/s | F=38.00 Mops/s
+      writers    | N= 24.2 Kops/s | B= 23.2 Kops/s | F= 8.40 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.5248 | read-limit/op=0/0/1.25e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.08x | F/B=1.05x | PASS
+    [12/16 readers] samples: 1 2 3 4  done
+      reads      | N=39.03 Mops/s | B=39.50 Mops/s | F=43.36 Mops/s
+      writers    | N= 23.4 Kops/s | B= 22.6 Kops/s | F= 8.15 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.5169 | read-limit/op=0/0/7.38e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.11x | F/B=1.10x | PASS
+    [13/16 readers] samples: 1 2 3 4  done
+      reads      | N=41.57 Mops/s | B=42.42 Mops/s | F=45.13 Mops/s
+      writers    | N= 23.5 Kops/s | B= 22.8 Kops/s | F= 7.95 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.5959 | read-limit/op=0/0/4.76e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.09x | F/B=1.06x | PASS
+    [14/16 readers] samples: 1 2 3 4  done
+      reads      | N=41.97 Mops/s | B=43.73 Mops/s | F=48.99 Mops/s
+      writers    | N= 22.0 Kops/s | B= 20.9 Kops/s | F= 7.72 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.6468 | read-limit/op=0/0/3.23e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.17x | F/B=1.12x | PASS
+    [15/16 readers] samples: 1 2 3 4  done
+      reads      | N=44.35 Mops/s | B=46.38 Mops/s | F=48.77 Mops/s
+      writers    | N= 22.3 Kops/s | B= 22.0 Kops/s | F= 7.64 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.7059 | read-limit/op=0/0/1.90e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.10x | F/B=1.05x | PASS
+    [16/16 readers] samples: 1 2 3 4  done
+      reads      | N=47.26 Mops/s | B=47.96 Mops/s | F=50.40 Mops/s
+      writers    | N= 21.4 Kops/s | B= 20.3 Kops/s | F= 7.60 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.6573 | read-limit/op=0/0/2.34e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.07x | F/B=1.05x | PASS
+
+TEST 3A OVERALL: PASS
+
+================================================================================
+TEST 3B - DISTRIBUTED STABLE READS + TWO WRITERS / FIXED-DURATION
+================================================================================
+Two writers mutate separate child relations across up to 100 legal parents.
+Reader sweep uses the same interval for N/B/F; read throughput, writer
+throughput, retries, and retry-limit events are reported separately.
+
+  CASE 1/4 | N=100 | K=4 | parent-pool=98 | 250 ms/backend/sample
+    [ 1/16 readers] samples: 1 2 3 4  done
+      reads      | N= 3.40 Mops/s | B= 3.84 Mops/s | F=14.54 Mops/s
+      writers    | N= 48.1 Kops/s | B= 41.1 Kops/s | F=20.36 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.5790 | read-limit/op=0/0/2.45e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=4.27x | F/B=3.79x | PASS
+    [ 2/16 readers] samples: 1 2 3 4  done
+      reads      | N= 5.88 Mops/s | B= 6.30 Mops/s | F=25.22 Mops/s
+      writers    | N= 44.9 Kops/s | B= 40.3 Kops/s | F=16.24 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.2528 | read-limit/op=0/0/1.31e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=4.29x | F/B=4.00x | PASS
+    [ 3/16 readers] samples: 1 2 3 4  done
+      reads      | N= 8.99 Mops/s | B= 9.05 Mops/s | F=35.45 Mops/s
+      writers    | N= 48.0 Kops/s | B= 40.2 Kops/s | F=14.62 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.2666 | read-limit/op=0/0/2.31e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=3.94x | F/B=3.92x | PASS
+    [ 4/16 readers] samples: 1 2 3 4  done
+      reads      | N=11.49 Mops/s | B=11.46 Mops/s | F=39.19 Mops/s
+      writers    | N= 47.5 Kops/s | B= 46.4 Kops/s | F=13.40 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.2703 | read-limit/op=0/0/8.04e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=3.41x | F/B=3.42x | PASS
+    [ 5/16 readers] samples: 1 2 3 4  done
+      reads      | N=14.43 Mops/s | B=15.04 Mops/s | F=49.33 Mops/s
+      writers    | N= 48.0 Kops/s | B= 46.1 Kops/s | F=12.54 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.3269 | read-limit/op=0/0/6.20e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=3.42x | F/B=3.28x | PASS
+    [ 6/16 readers] samples: 1 2 3 4  done
+      reads      | N=17.12 Mops/s | B=17.46 Mops/s | F=44.02 Mops/s
+      writers    | N= 47.6 Kops/s | B= 44.7 Kops/s | F=11.15 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.4979 | read-limit/op=0/0/1.33e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.57x | F/B=2.52x | PASS
+    [ 7/16 readers] samples: 1 2 3 4  done
+      reads      | N=19.49 Mops/s | B=20.10 Mops/s | F=45.35 Mops/s
+      writers    | N= 45.2 Kops/s | B= 43.2 Kops/s | F=10.98 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.5343 | read-limit/op=0/0/1.05e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.33x | F/B=2.26x | PASS
+    [ 8/16 readers] samples: 1 2 3 4  done
+      reads      | N=21.34 Mops/s | B=21.31 Mops/s | F=43.40 Mops/s
+      writers    | N= 42.4 Kops/s | B= 40.0 Kops/s | F=10.22 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.6551 | read-limit/op=0/0/6.91e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.03x | F/B=2.04x | PASS
+    [ 9/16 readers] samples: 1 2 3 4  done
+      reads      | N=23.37 Mops/s | B=23.83 Mops/s | F=49.27 Mops/s
+      writers    | N= 41.4 Kops/s | B= 39.2 Kops/s | F= 9.78 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.7679 | read-limit/op=0/0/9.72e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.11x | F/B=2.07x | PASS
+    [10/16 readers] samples: 1 2 3 4  done
+      reads      | N=24.45 Mops/s | B=24.99 Mops/s | F=48.44 Mops/s
+      writers    | N= 40.9 Kops/s | B= 38.5 Kops/s | F= 9.23 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.8910 | read-limit/op=0/0/1.84e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.98x | F/B=1.94x | PASS
+    [11/16 readers] samples: 1 2 3 4  done
+      reads      | N=26.28 Mops/s | B=26.83 Mops/s | F=47.93 Mops/s
+      writers    | N= 41.0 Kops/s | B= 37.6 Kops/s | F= 9.01 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.9565 | read-limit/op=0/0/9.30e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.82x | F/B=1.79x | PASS
+    [12/16 readers] samples: 1 2 3 4  done
+      reads      | N=28.07 Mops/s | B=28.55 Mops/s | F=52.72 Mops/s
+      writers    | N= 39.8 Kops/s | B= 36.7 Kops/s | F= 8.73 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.0127 | read-limit/op=0/0/8.18e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.88x | F/B=1.85x | PASS
+    [13/16 readers] samples: 1 2 3 4  done
+      reads      | N=29.33 Mops/s | B=30.97 Mops/s | F=58.39 Mops/s
+      writers    | N= 38.9 Kops/s | B= 35.5 Kops/s | F= 8.44 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.9886 | read-limit/op=0/0/2.92e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.99x | F/B=1.89x | PASS
+    [14/16 readers] samples: 1 2 3 4  done
+      reads      | N=31.34 Mops/s | B=34.18 Mops/s | F=62.52 Mops/s
+      writers    | N= 38.1 Kops/s | B= 35.9 Kops/s | F= 8.37 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.9994 | read-limit/op=0/0/7.54e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.99x | F/B=1.83x | PASS
+    [15/16 readers] samples: 1 2 3 4  done
+      reads      | N=32.51 Mops/s | B=33.63 Mops/s | F=63.77 Mops/s
+      writers    | N= 38.0 Kops/s | B= 34.3 Kops/s | F= 8.39 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.0265 | read-limit/op=0/0/7.22e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.96x | F/B=1.90x | PASS
+    [16/16 readers] samples: 1 2 3 4  done
+      reads      | N=34.88 Mops/s | B=38.92 Mops/s | F=63.05 Mops/s
+      writers    | N= 34.7 Kops/s | B= 31.3 Kops/s | F= 8.22 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.0979 | read-limit/op=0/0/1.82e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.81x | F/B=1.62x | PASS
+
+  CASE 2/4 | N=100 | K=32 | parent-pool=98 | 250 ms/backend/sample
+    [ 1/16 readers] samples: 1 2 3 4  done
+      reads      | N= 3.29 Mops/s | B= 3.49 Mops/s | F=13.75 Mops/s
+      writers    | N= 41.0 Kops/s | B= 40.9 Kops/s | F=17.63 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.3733 | read-limit/op=0/0/6.03e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=4.18x | F/B=3.94x | PASS
+    [ 2/16 readers] samples: 1 2 3 4  done
+      reads      | N= 5.78 Mops/s | B= 6.10 Mops/s | F=19.04 Mops/s
+      writers    | N= 43.8 Kops/s | B= 35.0 Kops/s | F=14.19 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.5258 | read-limit/op=0/0/4.83e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=3.29x | F/B=3.12x | PASS
+    [ 3/16 readers] samples: 1 2 3 4  done
+      reads      | N= 9.08 Mops/s | B= 9.24 Mops/s | F=23.79 Mops/s
+      writers    | N= 41.5 Kops/s | B= 43.3 Kops/s | F=13.37 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.6480 | read-limit/op=0/0/2.88e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.62x | F/B=2.57x | PASS
+    [ 4/16 readers] samples: 1 2 3 4  done
+      reads      | N=11.38 Mops/s | B=11.64 Mops/s | F=26.40 Mops/s
+      writers    | N= 47.2 Kops/s | B= 43.8 Kops/s | F=12.09 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.8048 | read-limit/op=0/0/2.57e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.32x | F/B=2.27x | PASS
+    [ 5/16 readers] samples: 1 2 3 4  done
+      reads      | N=14.26 Mops/s | B=14.67 Mops/s | F=30.26 Mops/s
+      writers    | N= 47.6 Kops/s | B= 41.9 Kops/s | F=11.49 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.0248 | read-limit/op=0/0/3.53e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.12x | F/B=2.06x | PASS
+    [ 6/16 readers] samples: 1 2 3 4  done
+      reads      | N=16.65 Mops/s | B=16.79 Mops/s | F=30.29 Mops/s
+      writers    | N= 44.2 Kops/s | B= 40.6 Kops/s | F=10.40 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.1974 | read-limit/op=0/0/4.69e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.82x | F/B=1.80x | PASS
+    [ 7/16 readers] samples: 1 2 3 4  done
+      reads      | N=19.13 Mops/s | B=19.07 Mops/s | F=31.50 Mops/s
+      writers    | N= 44.5 Kops/s | B= 41.0 Kops/s | F=10.19 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.2234 | read-limit/op=0/0/1.33e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.65x | F/B=1.65x | PASS
+    [ 8/16 readers] samples: 1 2 3 4  done
+      reads      | N=20.89 Mops/s | B=21.19 Mops/s | F=30.74 Mops/s
+      writers    | N= 41.0 Kops/s | B= 38.5 Kops/s | F= 9.28 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.3975 | read-limit/op=0/0/1.92e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.47x | F/B=1.45x | PASS
+    [ 9/16 readers] samples: 1 2 3 4  done
+      reads      | N=22.63 Mops/s | B=23.11 Mops/s | F=35.93 Mops/s
+      writers    | N= 41.8 Kops/s | B= 37.3 Kops/s | F= 8.91 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.5300 | read-limit/op=0/0/1.96e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.59x | F/B=1.55x | PASS
+    [10/16 readers] samples: 1 2 3 4  done
+      reads      | N=23.81 Mops/s | B=25.60 Mops/s | F=36.82 Mops/s
+      writers    | N= 39.7 Kops/s | B= 37.2 Kops/s | F= 8.55 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.5552 | read-limit/op=0/0/9.99e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.55x | F/B=1.44x | PASS
+    [11/16 readers] samples: 1 2 3 4  done
+      reads      | N=25.37 Mops/s | B=26.89 Mops/s | F=37.43 Mops/s
+      writers    | N= 39.8 Kops/s | B= 37.5 Kops/s | F= 8.32 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.5976 | read-limit/op=0/0/9.09e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.48x | F/B=1.39x | PASS
+    [12/16 readers] samples: 1 2 3 4  done
+      reads      | N=27.91 Mops/s | B=29.00 Mops/s | F=41.96 Mops/s
+      writers    | N= 39.7 Kops/s | B= 36.4 Kops/s | F= 8.03 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.6278 | read-limit/op=0/0/6.61e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.50x | F/B=1.45x | PASS
+    [13/16 readers] samples: 1 2 3 4  done
+      reads      | N=29.91 Mops/s | B=30.53 Mops/s | F=44.92 Mops/s
+      writers    | N= 39.1 Kops/s | B= 37.1 Kops/s | F= 7.78 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.7009 | read-limit/op=0/0/1.62e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.50x | F/B=1.47x | PASS
+    [14/16 readers] samples: 1 2 3 4  done
+      reads      | N=30.87 Mops/s | B=33.53 Mops/s | F=48.61 Mops/s
+      writers    | N= 38.7 Kops/s | B= 35.2 Kops/s | F= 7.70 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.6193 | read-limit/op=0/0/9.21e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.57x | F/B=1.45x | PASS
+    [15/16 readers] samples: 1 2 3 4  done
+      reads      | N=32.69 Mops/s | B=36.73 Mops/s | F=48.73 Mops/s
+      writers    | N= 37.8 Kops/s | B= 31.7 Kops/s | F= 7.57 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.7065 | read-limit/op=0/0/6.47e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.49x | F/B=1.33x | PASS
+    [16/16 readers] samples: 1 2 3 4  done
+      reads      | N=39.25 Mops/s | B=45.71 Mops/s | F=50.54 Mops/s
+      writers    | N= 30.0 Kops/s | B= 24.5 Kops/s | F= 7.41 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.7127 | read-limit/op=0/0/7.62e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.29x | F/B=1.11x | PASS
+
+  CASE 3/4 | N=10000 | K=4 | parent-pool=100 | 250 ms/backend/sample
+    [ 1/16 readers] samples: 1 2 3 4  done
+      reads      | N= 3.26 Mops/s | B= 3.42 Mops/s | F=15.40 Mops/s
+      writers    | N= 43.6 Kops/s | B= 41.9 Kops/s | F=19.94 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.3754 | read-limit/op=0/0/3.58e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=4.72x | F/B=4.50x | PASS
+    [ 2/16 readers] samples: 1 2 3 4  done
+      reads      | N= 5.98 Mops/s | B= 6.27 Mops/s | F=24.49 Mops/s
+      writers    | N= 39.8 Kops/s | B= 34.0 Kops/s | F=16.00 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.2883 | read-limit/op=0/0/2.49e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=4.10x | F/B=3.91x | PASS
+    [ 3/16 readers] samples: 1 2 3 4  done
+      reads      | N= 9.56 Mops/s | B= 9.57 Mops/s | F=35.55 Mops/s
+      writers    | N= 43.4 Kops/s | B= 43.5 Kops/s | F=14.81 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.2626 | read-limit/op=0/0/1.91e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=3.72x | F/B=3.72x | PASS
+    [ 4/16 readers] samples: 1 2 3 4  done
+      reads      | N=11.16 Mops/s | B=11.71 Mops/s | F=37.97 Mops/s
+      writers    | N= 49.5 Kops/s | B= 45.1 Kops/s | F=13.16 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.2939 | read-limit/op=0/0/1.79e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=3.40x | F/B=3.24x | PASS
+    [ 5/16 readers] samples: 1 2 3 4  done
+      reads      | N=14.39 Mops/s | B=15.33 Mops/s | F=43.87 Mops/s
+      writers    | N= 45.9 Kops/s | B= 42.2 Kops/s | F=12.15 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.4140 | read-limit/op=0/0/2.80e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=3.05x | F/B=2.86x | PASS
+    [ 6/16 readers] samples: 1 2 3 4  done
+      reads      | N=16.95 Mops/s | B=17.40 Mops/s | F=46.01 Mops/s
+      writers    | N= 46.8 Kops/s | B= 44.4 Kops/s | F=11.40 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.4412 | read-limit/op=0/0/3.08e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.71x | F/B=2.64x | PASS
+    [ 7/16 readers] samples: 1 2 3 4  done
+      reads      | N=19.21 Mops/s | B=20.04 Mops/s | F=47.56 Mops/s
+      writers    | N= 45.9 Kops/s | B= 41.4 Kops/s | F=11.29 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.4766 | read-limit/op=0/0/7.03e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.48x | F/B=2.37x | PASS
+    [ 8/16 readers] samples: 1 2 3 4  done
+      reads      | N=20.48 Mops/s | B=21.04 Mops/s | F=43.38 Mops/s
+      writers    | N= 42.3 Kops/s | B= 39.0 Kops/s | F=10.36 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.6678 | read-limit/op=0/0/1.38e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.12x | F/B=2.06x | PASS
+    [ 9/16 readers] samples: 1 2 3 4  done
+      reads      | N=22.82 Mops/s | B=23.32 Mops/s | F=50.83 Mops/s
+      writers    | N= 40.8 Kops/s | B= 38.9 Kops/s | F= 9.80 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.7011 | read-limit/op=0/0/1.19e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.23x | F/B=2.18x | PASS
+    [10/16 readers] samples: 1 2 3 4  done
+      reads      | N=24.65 Mops/s | B=24.53 Mops/s | F=48.11 Mops/s
+      writers    | N= 42.0 Kops/s | B= 38.4 Kops/s | F= 9.22 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.8752 | read-limit/op=0/0/8.03e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.95x | F/B=1.96x | PASS
+    [11/16 readers] samples: 1 2 3 4  done
+      reads      | N=25.54 Mops/s | B=26.44 Mops/s | F=50.25 Mops/s
+      writers    | N= 39.7 Kops/s | B= 37.2 Kops/s | F= 9.00 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.8590 | read-limit/op=0/0/4.77e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.97x | F/B=1.90x | PASS
+    [12/16 readers] samples: 1 2 3 4  done
+      reads      | N=27.54 Mops/s | B=29.57 Mops/s | F=55.96 Mops/s
+      writers    | N= 39.6 Kops/s | B= 36.6 Kops/s | F= 8.83 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.9127 | read-limit/op=0/0/4.71e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.03x | F/B=1.89x | PASS
+    [13/16 readers] samples: 1 2 3 4  done
+      reads      | N=29.56 Mops/s | B=32.58 Mops/s | F=57.48 Mops/s
+      writers    | N= 39.4 Kops/s | B= 34.8 Kops/s | F= 8.55 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.0250 | read-limit/op=0/0/3.27e-07 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.94x | F/B=1.76x | PASS
+    [14/16 readers] samples: 1 2 3 4  done
+      reads      | N=31.30 Mops/s | B=34.85 Mops/s | F=62.41 Mops/s
+      writers    | N= 39.2 Kops/s | B= 33.2 Kops/s | F= 8.33 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.0244 | read-limit/op=0/0/1.48e-05 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.99x | F/B=1.79x | PASS
+    [15/16 readers] samples: 1 2 3 4  done
+      reads      | N=32.63 Mops/s | B=35.53 Mops/s | F=60.91 Mops/s
+      writers    | N= 38.9 Kops/s | B= 35.1 Kops/s | F= 8.26 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.0715 | read-limit/op=0/0/2.52e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.87x | F/B=1.71x | PASS
+    [16/16 readers] samples: 1 2 3 4  done
+      reads      | N=37.45 Mops/s | B=41.26 Mops/s | F=61.66 Mops/s
+      writers    | N= 34.1 Kops/s | B= 27.6 Kops/s | F= 7.74 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.2273 | read-limit/op=0/0/2.37e-05 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.65x | F/B=1.49x | PASS
+
+  CASE 4/4 | N=10000 | K=32 | parent-pool=100 | 250 ms/backend/sample
+    [ 1/16 readers] samples: 1 2 3 4  done
+      reads      | N= 3.29 Mops/s | B= 3.42 Mops/s | F=13.33 Mops/s
+      writers    | N= 45.1 Kops/s | B= 40.5 Kops/s | F=17.76 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.4375 | read-limit/op=0/0/3.14e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=4.05x | F/B=3.90x | PASS
+    [ 2/16 readers] samples: 1 2 3 4  done
+      reads      | N= 5.83 Mops/s | B= 6.32 Mops/s | F=19.27 Mops/s
+      writers    | N= 37.1 Kops/s | B= 35.9 Kops/s | F=14.31 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.5014 | read-limit/op=0/0/2.71e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=3.31x | F/B=3.05x | PASS
+    [ 3/16 readers] samples: 1 2 3 4  done
+      reads      | N= 9.20 Mops/s | B= 9.87 Mops/s | F=23.91 Mops/s
+      writers    | N= 44.2 Kops/s | B= 40.8 Kops/s | F=13.08 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.6556 | read-limit/op=0/0/2.43e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.60x | F/B=2.42x | PASS
+    [ 4/16 readers] samples: 1 2 3 4  done
+      reads      | N=11.59 Mops/s | B=12.15 Mops/s | F=26.53 Mops/s
+      writers    | N= 45.6 Kops/s | B= 43.1 Kops/s | F=12.12 Mops/s
+      contention | read-retry/op N/B/F=0/0/0.8039 | read-limit/op=0/0/2.48e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.29x | F/B=2.18x | PASS
+    [ 5/16 readers] samples: 1 2 3 4  done
+      reads      | N=14.54 Mops/s | B=14.96 Mops/s | F=30.34 Mops/s
+      writers    | N= 47.9 Kops/s | B= 41.6 Kops/s | F=11.54 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.0066 | read-limit/op=0/0/2.49e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=2.09x | F/B=2.03x | PASS
+    [ 6/16 readers] samples: 1 2 3 4  done
+      reads      | N=16.40 Mops/s | B=17.04 Mops/s | F=30.67 Mops/s
+      writers    | N= 44.7 Kops/s | B= 42.7 Kops/s | F=10.30 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.1929 | read-limit/op=0/0/2.39e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.87x | F/B=1.80x | PASS
+    [ 7/16 readers] samples: 1 2 3 4  done
+      reads      | N=18.75 Mops/s | B=19.23 Mops/s | F=30.30 Mops/s
+      writers    | N= 43.2 Kops/s | B= 41.1 Kops/s | F= 9.99 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.2587 | read-limit/op=0/0/1.35e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.62x | F/B=1.58x | PASS
+    [ 8/16 readers] samples: 1 2 3 4  done
+      reads      | N=20.11 Mops/s | B=20.78 Mops/s | F=31.14 Mops/s
+      writers    | N= 41.2 Kops/s | B= 39.4 Kops/s | F= 9.39 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.3807 | read-limit/op=0/0/1.78e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.55x | F/B=1.50x | PASS
+    [ 9/16 readers] samples: 1 2 3 4  done
+      reads      | N=22.90 Mops/s | B=22.90 Mops/s | F=35.39 Mops/s
+      writers    | N= 41.6 Kops/s | B= 37.3 Kops/s | F= 8.79 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.5553 | read-limit/op=0/0/8.01e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.55x | F/B=1.55x | PASS
+    [10/16 readers] samples: 1 2 3 4  done
+      reads      | N=24.55 Mops/s | B=24.90 Mops/s | F=36.03 Mops/s
+      writers    | N= 40.0 Kops/s | B= 37.5 Kops/s | F= 8.35 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.6268 | read-limit/op=0/0/2.73e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.47x | F/B=1.45x | PASS
+    [11/16 readers] samples: 1 2 3 4  done
+      reads      | N=25.64 Mops/s | B=26.92 Mops/s | F=37.36 Mops/s
+      writers    | N= 39.7 Kops/s | B= 37.9 Kops/s | F= 8.28 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.5827 | read-limit/op=0/0/1.72e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.46x | F/B=1.39x | PASS
+    [12/16 readers] samples: 1 2 3 4  done
+      reads      | N=27.59 Mops/s | B=29.54 Mops/s | F=42.83 Mops/s
+      writers    | N= 37.4 Kops/s | B= 36.5 Kops/s | F= 7.94 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.5926 | read-limit/op=0/0/1.75e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.55x | F/B=1.45x | PASS
+    [13/16 readers] samples: 1 2 3 4  done
+      reads      | N=29.59 Mops/s | B=31.09 Mops/s | F=46.23 Mops/s
+      writers    | N= 38.4 Kops/s | B= 36.8 Kops/s | F= 7.77 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.6393 | read-limit/op=0/0/1.92e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.56x | F/B=1.49x | PASS
+    [14/16 readers] samples: 1 2 3 4  done
+      reads      | N=31.43 Mops/s | B=33.15 Mops/s | F=48.85 Mops/s
+      writers    | N= 39.0 Kops/s | B= 36.7 Kops/s | F= 7.74 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.6301 | read-limit/op=0/0/1.55e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.55x | F/B=1.47x | PASS
+    [15/16 readers] samples: 1 2 3 4  done
+      reads      | N=33.06 Mops/s | B=38.26 Mops/s | F=47.33 Mops/s
+      writers    | N= 37.0 Kops/s | B= 32.7 Kops/s | F= 7.62 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.6952 | read-limit/op=0/0/2.97e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.43x | F/B=1.24x | PASS
+    [16/16 readers] samples: 1 2 3 4  done
+      reads      | N=40.55 Mops/s | B=42.11 Mops/s | F=51.82 Mops/s
+      writers    | N= 28.1 Kops/s | B= 28.6 Kops/s | F= 7.42 Mops/s
+      contention | read-retry/op N/B/F=0/0/1.7525 | read-limit/op=0/0/8.51e-06 | write-limit/op=0/0/0
+      ratio      | read throughput F/N=1.28x | F/B=1.23x | PASS
+
+TEST 3B OVERALL: PASS
+
+TEST 3 OVERALL: PASS
+
+================================================================================
+LIVEGRAPH VS SUPERNOVA TESTS 1-3 SUMMARY
+================================================================================
+  Test 1: PASS
+  Test 2: PASS
+  Test 3: PASS
