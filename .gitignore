@@ -15,3 +15,4 @@ Dump
 *.ilk
 *.so
 *.pyd
+/LiveGraphVsSuperNova_results.txt

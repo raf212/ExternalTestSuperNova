@@ -2,7 +2,10 @@
 g++ main.cpp \
     -std=c++20 \
     -O3 \
+    -DNDEBUG \
     -march=native \
+    -mtune=native \
+    -flto=auto \
     -fopenmp \
     -I. \
     -L./LiveGraph/build \
