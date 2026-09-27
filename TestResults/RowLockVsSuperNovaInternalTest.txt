@@ -1,0 +1,1331 @@
+BENCHMARK CONTEXT
+  C++ language level      : 202002
+  pointer width           : 64 bits
+  hardware_concurrency    : 20
+  uint64 atomic lock-free : YES
+  assertions              : disabled (NDEBUG)
+  compiler                : GCC 13.3.0
+  note                    : CPU model, clock policy, compiler flags, and OS
+                            should be recorded externally for publication.
+
+SUITE CONFIGURATION
+  node bounds             : 100 .. 10000
+  parent-capacity bounds  : 4 .. 32
+  usable threads          : 18
+  Test 2 writer sweep     : 1..16
+  Test 3 reader sweep     : 1..16 + 2 fixed writers
+  measured samples/point  : 4
+
+================================================================================
+TEST 1 - SCALED FAIR BIDIRECTIONAL DAG / 1 KiB PAYLOAD COMPARISON
+================================================================================
+Compact vector DAG vs minimal single-region SuperNova Fabric.
+Each case uses the same N, K, fully populated H/V bounded topology, and
+exactly 128 x uint64_t (1024 B) payload per node. Four measured samples
+are taken per row with backend order alternated.
+
+  CASE 1/4  N=100  K=4
+    edges/axis=390  payload/node=1024 B
+    storage vector/Fabric=113600/141440 B  Fabric/vector=1.25x
+  construction                vector=  10362.00 ns/op  Fabric=  72748.50 ns/op  Fabric/vector=   7.02x
+  H parent scan               vector=      0.44 ns/op  Fabric=      6.36 ns/op  Fabric/vector=  14.34x
+  V parent scan               vector=      0.45 ns/op  Fabric=      6.17 ns/op  Fabric/vector=  13.59x
+  H reverse-child scan        vector=      1.65 ns/op  Fabric=     15.44 ns/op  Fabric/vector=   9.37x
+  V reverse-child scan        vector=      1.73 ns/op  Fabric=     14.03 ns/op  Fabric/vector=   8.12x
+  payload direct read         vector=      0.22 ns/op  Fabric=      0.37 ns/op  Fabric/vector=   1.66x
+  payload atomic_ref read     vector=      0.38 ns/op  Fabric=      0.63 ns/op  Fabric/vector=   1.66x
+  H child + payload           vector=      1.74 ns/op  Fabric=     15.87 ns/op  Fabric/vector=   9.10x
+  H parent replace            vector=      5.40 ns/op  Fabric=     87.93 ns/op  Fabric/vector=  16.29x
+  V parent replace            vector=      5.79 ns/op  Fabric=     69.30 ns/op  Fabric/vector=  11.96x
+    integrity=PASS
+
+  CASE 2/4  N=100  K=32
+    edges/axis=2672  payload/node=1024 B
+    storage vector/Fabric=180800/231040 B  Fabric/vector=1.28x
+  construction                vector=  81303.00 ns/op  Fabric= 375792.50 ns/op  Fabric/vector=   4.62x
+  H parent scan               vector=      0.35 ns/op  Fabric=      6.14 ns/op  Fabric/vector=  17.45x
+  V parent scan               vector=      0.34 ns/op  Fabric=      6.00 ns/op  Fabric/vector=  17.50x
+  H reverse-child scan        vector=      1.98 ns/op  Fabric=     16.60 ns/op  Fabric/vector=   8.40x
+  V reverse-child scan        vector=      2.02 ns/op  Fabric=     16.46 ns/op  Fabric/vector=   8.15x
+  payload direct read         vector=      0.22 ns/op  Fabric=      0.36 ns/op  Fabric/vector=   1.61x
+  payload atomic_ref read     vector=      0.38 ns/op  Fabric=      0.62 ns/op  Fabric/vector=   1.63x
+  H child + payload           vector=      2.07 ns/op  Fabric=     17.02 ns/op  Fabric/vector=   8.22x
+  H parent replace            vector=     14.08 ns/op  Fabric=     94.61 ns/op  Fabric/vector=   6.72x
+  V parent replace            vector=     12.47 ns/op  Fabric=     79.87 ns/op  Fabric/vector=   6.41x
+    integrity=PASS
+
+  CASE 3/4  N=10000  K=4
+    edges/axis=39990  payload/node=1024 B
+    storage vector/Fabric=11360000/14080384 B  Fabric/vector=1.24x
+  construction                vector=1471497.00 ns/op  Fabric=10967410.50 ns/op  Fabric/vector=   7.45x
+  H parent scan               vector=      0.45 ns/op  Fabric=      6.46 ns/op  Fabric/vector=  14.42x
+  V parent scan               vector=      0.46 ns/op  Fabric=      6.32 ns/op  Fabric/vector=  13.65x
+  H reverse-child scan        vector=      1.67 ns/op  Fabric=     15.50 ns/op  Fabric/vector=   9.31x
+  V reverse-child scan        vector=      1.74 ns/op  Fabric=     14.33 ns/op  Fabric/vector=   8.21x
+  payload direct read         vector=      0.76 ns/op  Fabric=      0.68 ns/op  Fabric/vector=   0.89x
+  payload atomic_ref read     vector=      0.59 ns/op  Fabric=      0.77 ns/op  Fabric/vector=   1.30x
+  H child + payload           vector=      2.11 ns/op  Fabric=     16.21 ns/op  Fabric/vector=   7.68x
+  H parent replace            vector=      5.51 ns/op  Fabric=     87.51 ns/op  Fabric/vector=  15.87x
+  V parent replace            vector=      5.65 ns/op  Fabric=     69.62 ns/op  Fabric/vector=  12.32x
+    integrity=PASS
+
+  CASE 4/4  N=10000  K=32
+    edges/axis=319472  payload/node=1024 B
+    storage vector/Fabric=18080000/23040384 B  Fabric/vector=1.27x
+  construction                vector=10896555.00 ns/op  Fabric=46745727.50 ns/op  Fabric/vector=   4.29x
+  H parent scan               vector=      0.42 ns/op  Fabric=      6.24 ns/op  Fabric/vector=  15.00x
+  V parent scan               vector=      0.41 ns/op  Fabric=      6.30 ns/op  Fabric/vector=  15.21x
+  H reverse-child scan        vector=      2.10 ns/op  Fabric=     16.85 ns/op  Fabric/vector=   8.02x
+  V reverse-child scan        vector=      2.38 ns/op  Fabric=     16.97 ns/op  Fabric/vector=   7.14x
+  payload direct read         vector=      0.70 ns/op  Fabric=      0.62 ns/op  Fabric/vector=   0.88x
+  payload atomic_ref read     vector=      0.81 ns/op  Fabric=      0.81 ns/op  Fabric/vector=   1.00x
+  H child + payload           vector=      2.47 ns/op  Fabric=     17.33 ns/op  Fabric/vector=   7.00x
+  H parent replace            vector=     14.26 ns/op  Fabric=     96.23 ns/op  Fabric/vector=   6.75x
+  V parent replace            vector=     12.86 ns/op  Fabric=     77.61 ns/op  Fabric/vector=   6.04x
+    integrity=PASS
+
+TEST 1 OVERALL: PASS
+
+================================================================================
+TEST 2A - HOTSPOT STRUCTURAL MUTATION
+================================================================================
+Each writer owns one child; all writers contend on the same two H and two V
+parents. The baseline locks only participating rows. Every writer count from
+1 through usable_threads-2 is printed for each of the four (N,K) cases.
+
+  CASE 1/4  N=100  K=4  parent-pool=4
+    threads= 1  rowlock=    35.09 ns/op (  28.50 M/s)  Fabric=    55.23 ns/op (  18.11 M/s)  Fabric/row=  1.57x  retry/success=  0.0000  PASS
+    threads= 2  rowlock=    59.17 ns/op (  16.90 M/s)  Fabric=   108.67 ns/op (   9.20 M/s)  Fabric/row=  1.84x  retry/success=  0.5865  PASS
+    threads= 3  rowlock=    71.05 ns/op (  14.07 M/s)  Fabric=   111.09 ns/op (   9.00 M/s)  Fabric/row=  1.56x  retry/success=  1.8515  PASS
+    threads= 4  rowlock=    87.55 ns/op (  11.42 M/s)  Fabric=   123.12 ns/op (   8.12 M/s)  Fabric/row=  1.41x  retry/success=  4.2435  PASS
+    threads= 5  rowlock=   102.15 ns/op (   9.79 M/s)  Fabric=   128.64 ns/op (   7.77 M/s)  Fabric/row=  1.26x  retry/success=  7.0951  PASS
+    threads= 6  rowlock=   105.08 ns/op (   9.52 M/s)  Fabric=   133.17 ns/op (   7.51 M/s)  Fabric/row=  1.27x  retry/success=  9.9296  PASS
+    threads= 7  rowlock=   105.64 ns/op (   9.47 M/s)  Fabric=   144.17 ns/op (   6.94 M/s)  Fabric/row=  1.36x  retry/success= 12.8737  PASS
+    threads= 8  rowlock=   105.72 ns/op (   9.46 M/s)  Fabric=   146.16 ns/op (   6.84 M/s)  Fabric/row=  1.38x  retry/success= 15.6944  PASS
+    threads= 9  rowlock=   141.60 ns/op (   7.06 M/s)  Fabric=   158.82 ns/op (   6.30 M/s)  Fabric/row=  1.12x  retry/success= 17.7227  PASS
+    threads=10  rowlock=   164.67 ns/op (   6.07 M/s)  Fabric=   152.47 ns/op (   6.56 M/s)  Fabric/row=  0.93x  retry/success= 18.6031  PASS
+    threads=11  rowlock=   172.72 ns/op (   5.79 M/s)  Fabric=   159.91 ns/op (   6.25 M/s)  Fabric/row=  0.93x  retry/success= 21.0184  PASS
+    threads=12  rowlock=   189.78 ns/op (   5.27 M/s)  Fabric=   171.62 ns/op (   5.83 M/s)  Fabric/row=  0.90x  retry/success= 21.9434  PASS
+    threads=13  rowlock=   200.42 ns/op (   4.99 M/s)  Fabric=   181.86 ns/op (   5.50 M/s)  Fabric/row=  0.91x  retry/success= 22.6611  PASS
+    threads=14  rowlock=   221.68 ns/op (   4.51 M/s)  Fabric=   198.39 ns/op (   5.04 M/s)  Fabric/row=  0.89x  retry/success= 25.4924  PASS
+    threads=15  rowlock=   214.05 ns/op (   4.67 M/s)  Fabric=   205.14 ns/op (   4.87 M/s)  Fabric/row=  0.96x  retry/success= 27.3264  PASS
+    threads=16  rowlock=   241.25 ns/op (   4.15 M/s)  Fabric=   211.90 ns/op (   4.72 M/s)  Fabric/row=  0.88x  retry/success= 29.3926  PASS
+
+  CASE 2/4  N=100  K=32  parent-pool=4
+    threads= 1  rowlock=    37.45 ns/op (  26.70 M/s)  Fabric=    68.86 ns/op (  14.52 M/s)  Fabric/row=  1.84x  retry/success=  0.0000  PASS
+    threads= 2  rowlock=    82.26 ns/op (  12.16 M/s)  Fabric=   118.54 ns/op (   8.44 M/s)  Fabric/row=  1.44x  retry/success=  0.6306  PASS
+    threads= 3  rowlock=    77.79 ns/op (  12.86 M/s)  Fabric=   117.94 ns/op (   8.48 M/s)  Fabric/row=  1.52x  retry/success=  2.1627  PASS
+    threads= 4  rowlock=    88.95 ns/op (  11.24 M/s)  Fabric=   124.20 ns/op (   8.05 M/s)  Fabric/row=  1.40x  retry/success=  4.0641  PASS
+    threads= 5  rowlock=   103.63 ns/op (   9.65 M/s)  Fabric=   130.96 ns/op (   7.64 M/s)  Fabric/row=  1.26x  retry/success=  8.1452  PASS
+    threads= 6  rowlock=   121.83 ns/op (   8.21 M/s)  Fabric=   140.65 ns/op (   7.11 M/s)  Fabric/row=  1.15x  retry/success= 11.4992  PASS
+    threads= 7  rowlock=   141.49 ns/op (   7.07 M/s)  Fabric=   138.05 ns/op (   7.24 M/s)  Fabric/row=  0.98x  retry/success= 14.4293  PASS
+    threads= 8  rowlock=   153.91 ns/op (   6.50 M/s)  Fabric=   151.34 ns/op (   6.61 M/s)  Fabric/row=  0.98x  retry/success= 17.3470  PASS
+    threads= 9  rowlock=   159.96 ns/op (   6.25 M/s)  Fabric=   160.80 ns/op (   6.22 M/s)  Fabric/row=  1.01x  retry/success= 20.4883  PASS
+    threads=10  rowlock=   184.31 ns/op (   5.43 M/s)  Fabric=   162.36 ns/op (   6.16 M/s)  Fabric/row=  0.88x  retry/success= 23.1841  PASS
+    threads=11  rowlock=   182.61 ns/op (   5.48 M/s)  Fabric=   171.82 ns/op (   5.82 M/s)  Fabric/row=  0.94x  retry/success= 22.5812  PASS
+    threads=12  rowlock=   197.96 ns/op (   5.05 M/s)  Fabric=   173.45 ns/op (   5.77 M/s)  Fabric/row=  0.88x  retry/success= 24.0073  PASS
+    threads=13  rowlock=   215.99 ns/op (   4.63 M/s)  Fabric=   181.25 ns/op (   5.52 M/s)  Fabric/row=  0.84x  retry/success= 26.6854  PASS
+    threads=14  rowlock=   229.17 ns/op (   4.36 M/s)  Fabric=   180.95 ns/op (   5.53 M/s)  Fabric/row=  0.79x  retry/success= 27.1736  PASS
+    threads=15  rowlock=   240.34 ns/op (   4.16 M/s)  Fabric=   209.08 ns/op (   4.78 M/s)  Fabric/row=  0.87x  retry/success= 31.6978  PASS
+    threads=16  rowlock=   245.78 ns/op (   4.07 M/s)  Fabric=   213.66 ns/op (   4.68 M/s)  Fabric/row=  0.87x  retry/success= 34.5298  PASS
+
+  CASE 3/4  N=10000  K=4  parent-pool=4
+    threads= 1  rowlock=    35.59 ns/op (  28.09 M/s)  Fabric=    54.13 ns/op (  18.47 M/s)  Fabric/row=  1.52x  retry/success=  0.0000  PASS
+    threads= 2  rowlock=    68.73 ns/op (  14.55 M/s)  Fabric=    99.49 ns/op (  10.05 M/s)  Fabric/row=  1.45x  retry/success=  0.3854  PASS
+    threads= 3  rowlock=    64.88 ns/op (  15.41 M/s)  Fabric=   121.89 ns/op (   8.20 M/s)  Fabric/row=  1.88x  retry/success=  1.9221  PASS
+    threads= 4  rowlock=    71.38 ns/op (  14.01 M/s)  Fabric=   119.95 ns/op (   8.34 M/s)  Fabric/row=  1.68x  retry/success=  3.7987  PASS
+    threads= 5  rowlock=    82.99 ns/op (  12.05 M/s)  Fabric=   132.95 ns/op (   7.52 M/s)  Fabric/row=  1.60x  retry/success=  7.4798  PASS
+    threads= 6  rowlock=    86.28 ns/op (  11.59 M/s)  Fabric=   137.83 ns/op (   7.26 M/s)  Fabric/row=  1.60x  retry/success= 10.7560  PASS
+    threads= 7  rowlock=    98.39 ns/op (  10.16 M/s)  Fabric=   146.87 ns/op (   6.81 M/s)  Fabric/row=  1.49x  retry/success= 13.4907  PASS
+    threads= 8  rowlock=   113.98 ns/op (   8.77 M/s)  Fabric=   145.18 ns/op (   6.89 M/s)  Fabric/row=  1.27x  retry/success= 15.4421  PASS
+    threads= 9  rowlock=   149.58 ns/op (   6.69 M/s)  Fabric=   151.38 ns/op (   6.61 M/s)  Fabric/row=  1.01x  retry/success= 16.9355  PASS
+    threads=10  rowlock=   163.94 ns/op (   6.10 M/s)  Fabric=   154.13 ns/op (   6.49 M/s)  Fabric/row=  0.94x  retry/success= 19.0047  PASS
+    threads=11  rowlock=   174.26 ns/op (   5.74 M/s)  Fabric=   170.27 ns/op (   5.87 M/s)  Fabric/row=  0.98x  retry/success= 20.5904  PASS
+    threads=12  rowlock=   184.83 ns/op (   5.41 M/s)  Fabric=   179.47 ns/op (   5.57 M/s)  Fabric/row=  0.97x  retry/success= 22.5332  PASS
+    threads=13  rowlock=   191.15 ns/op (   5.23 M/s)  Fabric=   183.57 ns/op (   5.45 M/s)  Fabric/row=  0.96x  retry/success= 23.3477  PASS
+    threads=14  rowlock=   219.76 ns/op (   4.55 M/s)  Fabric=   202.81 ns/op (   4.93 M/s)  Fabric/row=  0.92x  retry/success= 27.7146  PASS
+    threads=15  rowlock=   229.48 ns/op (   4.36 M/s)  Fabric=   215.52 ns/op (   4.64 M/s)  Fabric/row=  0.94x  retry/success= 28.5122  PASS
+    threads=16  rowlock=   227.80 ns/op (   4.39 M/s)  Fabric=   221.59 ns/op (   4.51 M/s)  Fabric/row=  0.97x  retry/success= 30.1922  PASS
+
+  CASE 4/4  N=10000  K=32  parent-pool=4
+    threads= 1  rowlock=    40.23 ns/op (  24.86 M/s)  Fabric=    72.45 ns/op (  13.80 M/s)  Fabric/row=  1.80x  retry/success=  0.0000  PASS
+    threads= 2  rowlock=    76.81 ns/op (  13.02 M/s)  Fabric=   119.48 ns/op (   8.37 M/s)  Fabric/row=  1.56x  retry/success=  0.6218  PASS
+    threads= 3  rowlock=    80.41 ns/op (  12.44 M/s)  Fabric=   120.64 ns/op (   8.29 M/s)  Fabric/row=  1.50x  retry/success=  2.2115  PASS
+    threads= 4  rowlock=   100.69 ns/op (   9.93 M/s)  Fabric=   122.62 ns/op (   8.16 M/s)  Fabric/row=  1.22x  retry/success=  3.7115  PASS
+    threads= 5  rowlock=   119.11 ns/op (   8.40 M/s)  Fabric=   128.95 ns/op (   7.75 M/s)  Fabric/row=  1.08x  retry/success=  7.2323  PASS
+    threads= 6  rowlock=   127.43 ns/op (   7.85 M/s)  Fabric=   132.76 ns/op (   7.53 M/s)  Fabric/row=  1.04x  retry/success= 11.1213  PASS
+    threads= 7  rowlock=   139.05 ns/op (   7.19 M/s)  Fabric=   148.19 ns/op (   6.75 M/s)  Fabric/row=  1.07x  retry/success= 14.1279  PASS
+    threads= 8  rowlock=   142.09 ns/op (   7.04 M/s)  Fabric=   153.15 ns/op (   6.53 M/s)  Fabric/row=  1.08x  retry/success= 16.7112  PASS
+    threads= 9  rowlock=   146.04 ns/op (   6.85 M/s)  Fabric=   165.23 ns/op (   6.05 M/s)  Fabric/row=  1.13x  retry/success= 18.8717  PASS
+    threads=10  rowlock=   155.83 ns/op (   6.42 M/s)  Fabric=   164.16 ns/op (   6.09 M/s)  Fabric/row=  1.05x  retry/success= 21.4810  PASS
+    threads=11  rowlock=   178.49 ns/op (   5.60 M/s)  Fabric=   188.65 ns/op (   5.30 M/s)  Fabric/row=  1.06x  retry/success= 23.5896  PASS
+    threads=12  rowlock=   215.57 ns/op (   4.64 M/s)  Fabric=   173.55 ns/op (   5.76 M/s)  Fabric/row=  0.81x  retry/success= 24.2910  PASS
+    threads=13  rowlock=   228.45 ns/op (   4.38 M/s)  Fabric=   191.62 ns/op (   5.22 M/s)  Fabric/row=  0.84x  retry/success= 26.0735  PASS
+    threads=14  rowlock=   224.38 ns/op (   4.46 M/s)  Fabric=   204.14 ns/op (   4.90 M/s)  Fabric/row=  0.91x  retry/success= 28.7141  PASS
+    threads=15  rowlock=   244.67 ns/op (   4.09 M/s)  Fabric=   216.57 ns/op (   4.62 M/s)  Fabric/row=  0.89x  retry/success= 30.4949  PASS
+    threads=16  rowlock=   259.43 ns/op (   3.85 M/s)  Fabric=   224.43 ns/op (   4.46 M/s)  Fabric/row=  0.87x  retry/success= 33.2168  PASS
+
+TEST 2A OVERALL: PASS
+
+================================================================================
+TEST 2B - DISTRIBUTED STRUCTURAL MUTATION
+================================================================================
+Each writer owns one child and follows the same deterministic random schedule
+for both backends. The parent pool is min(100, legal predecessor nodes).
+Test 2B now uses the same 1..(usable_threads-2) sweep as Test 2A.
+
+  CASE 1/4  N=100  K=4  parent-pool=84
+    threads= 1  rowlock=    36.10 ns/op (  27.70 M/s)  Fabric=    57.26 ns/op (  17.47 M/s)  Fabric/row=  1.59x  retry/success=  0.0000  PASS
+    threads= 2  rowlock=    78.25 ns/op (  12.78 M/s)  Fabric=    40.52 ns/op (  24.68 M/s)  Fabric/row=  0.52x  retry/success=  0.0269  PASS
+    threads= 3  rowlock=    56.97 ns/op (  17.55 M/s)  Fabric=    31.36 ns/op (  31.89 M/s)  Fabric/row=  0.55x  retry/success=  0.0547  PASS
+    threads= 4  rowlock=    50.72 ns/op (  19.71 M/s)  Fabric=    26.51 ns/op (  37.73 M/s)  Fabric/row=  0.52x  retry/success=  0.1073  PASS
+    threads= 5  rowlock=    46.30 ns/op (  21.60 M/s)  Fabric=    23.20 ns/op (  43.10 M/s)  Fabric/row=  0.50x  retry/success=  0.1558  PASS
+    threads= 6  rowlock=    43.36 ns/op (  23.06 M/s)  Fabric=    20.61 ns/op (  48.52 M/s)  Fabric/row=  0.48x  retry/success=  0.1874  PASS
+    threads= 7  rowlock=    40.57 ns/op (  24.65 M/s)  Fabric=    20.54 ns/op (  48.68 M/s)  Fabric/row=  0.51x  retry/success=  0.3246  PASS
+    threads= 8  rowlock=    39.70 ns/op (  25.19 M/s)  Fabric=    19.35 ns/op (  51.67 M/s)  Fabric/row=  0.49x  retry/success=  0.2318  PASS
+    threads= 9  rowlock=    36.05 ns/op (  27.74 M/s)  Fabric=    20.40 ns/op (  49.02 M/s)  Fabric/row=  0.57x  retry/success=  0.3155  PASS
+    threads=10  rowlock=    36.05 ns/op (  27.74 M/s)  Fabric=    19.56 ns/op (  51.14 M/s)  Fabric/row=  0.54x  retry/success=  0.3081  PASS
+    threads=11  rowlock=    36.29 ns/op (  27.56 M/s)  Fabric=    17.86 ns/op (  55.99 M/s)  Fabric/row=  0.49x  retry/success=  0.3931  PASS
+    threads=12  rowlock=    34.53 ns/op (  28.96 M/s)  Fabric=    17.30 ns/op (  57.79 M/s)  Fabric/row=  0.50x  retry/success=  0.4083  PASS
+    threads=13  rowlock=    36.60 ns/op (  27.32 M/s)  Fabric=    17.32 ns/op (  57.75 M/s)  Fabric/row=  0.47x  retry/success=  0.9463  PASS
+    threads=14  rowlock=    33.61 ns/op (  29.76 M/s)  Fabric=    16.14 ns/op (  61.96 M/s)  Fabric/row=  0.48x  retry/success=  0.6869  PASS
+    threads=15  rowlock=    33.78 ns/op (  29.60 M/s)  Fabric=    15.63 ns/op (  63.97 M/s)  Fabric/row=  0.46x  retry/success=  0.5816  PASS
+    threads=16  rowlock=    33.55 ns/op (  29.81 M/s)  Fabric=    18.11 ns/op (  55.23 M/s)  Fabric/row=  0.54x  retry/success=  1.2545  PASS
+
+  CASE 2/4  N=100  K=32  parent-pool=84
+    threads= 1  rowlock=    37.47 ns/op (  26.68 M/s)  Fabric=    74.74 ns/op (  13.38 M/s)  Fabric/row=  1.99x  retry/success=  0.0000  PASS
+    threads= 2  rowlock=    60.15 ns/op (  16.63 M/s)  Fabric=    60.39 ns/op (  16.56 M/s)  Fabric/row=  1.00x  retry/success=  0.0251  PASS
+    threads= 3  rowlock=    50.87 ns/op (  19.66 M/s)  Fabric=    46.29 ns/op (  21.60 M/s)  Fabric/row=  0.91x  retry/success=  0.0668  PASS
+    threads= 4  rowlock=    46.93 ns/op (  21.31 M/s)  Fabric=    37.83 ns/op (  26.43 M/s)  Fabric/row=  0.81x  retry/success=  0.2202  PASS
+    threads= 5  rowlock=    42.32 ns/op (  23.63 M/s)  Fabric=    31.25 ns/op (  32.00 M/s)  Fabric/row=  0.74x  retry/success=  0.1496  PASS
+    threads= 6  rowlock=    41.77 ns/op (  23.94 M/s)  Fabric=    27.61 ns/op (  36.22 M/s)  Fabric/row=  0.66x  retry/success=  0.3533  PASS
+    threads= 7  rowlock=    37.37 ns/op (  26.76 M/s)  Fabric=    26.93 ns/op (  37.13 M/s)  Fabric/row=  0.72x  retry/success=  0.3113  PASS
+    threads= 8  rowlock=    35.72 ns/op (  27.99 M/s)  Fabric=    25.25 ns/op (  39.60 M/s)  Fabric/row=  0.71x  retry/success=  0.3281  PASS
+    threads= 9  rowlock=    36.61 ns/op (  27.31 M/s)  Fabric=    24.19 ns/op (  41.34 M/s)  Fabric/row=  0.66x  retry/success=  0.4078  PASS
+    threads=10  rowlock=    34.55 ns/op (  28.94 M/s)  Fabric=    22.43 ns/op (  44.59 M/s)  Fabric/row=  0.65x  retry/success=  0.5762  PASS
+    threads=11  rowlock=    33.02 ns/op (  30.29 M/s)  Fabric=    20.92 ns/op (  47.80 M/s)  Fabric/row=  0.63x  retry/success=  0.4651  PASS
+    threads=12  rowlock=    35.35 ns/op (  28.29 M/s)  Fabric=    22.20 ns/op (  45.04 M/s)  Fabric/row=  0.63x  retry/success=  1.4274  PASS
+    threads=13  rowlock=    35.97 ns/op (  27.80 M/s)  Fabric=    20.69 ns/op (  48.33 M/s)  Fabric/row=  0.58x  retry/success=  0.7329  PASS
+    threads=14  rowlock=    33.07 ns/op (  30.24 M/s)  Fabric=    19.33 ns/op (  51.73 M/s)  Fabric/row=  0.58x  retry/success=  0.8217  PASS
+    threads=15  rowlock=    33.18 ns/op (  30.13 M/s)  Fabric=    17.74 ns/op (  56.36 M/s)  Fabric/row=  0.53x  retry/success=  0.6406  PASS
+    threads=16  rowlock=    32.86 ns/op (  30.43 M/s)  Fabric=    19.34 ns/op (  51.71 M/s)  Fabric/row=  0.59x  retry/success=  1.1941  PASS
+
+  CASE 3/4  N=10000  K=4  parent-pool=100
+    threads= 1  rowlock=    35.19 ns/op (  28.41 M/s)  Fabric=    59.97 ns/op (  16.68 M/s)  Fabric/row=  1.70x  retry/success=  0.0000  PASS
+    threads= 2  rowlock=    67.32 ns/op (  14.85 M/s)  Fabric=    42.29 ns/op (  23.64 M/s)  Fabric/row=  0.63x  retry/success=  0.0207  PASS
+    threads= 3  rowlock=    58.05 ns/op (  17.23 M/s)  Fabric=    33.23 ns/op (  30.10 M/s)  Fabric/row=  0.57x  retry/success=  0.0513  PASS
+    threads= 4  rowlock=    47.85 ns/op (  20.90 M/s)  Fabric=    26.55 ns/op (  37.67 M/s)  Fabric/row=  0.55x  retry/success=  0.0807  PASS
+    threads= 5  rowlock=    48.70 ns/op (  20.53 M/s)  Fabric=    25.09 ns/op (  39.85 M/s)  Fabric/row=  0.52x  retry/success=  0.1036  PASS
+    threads= 6  rowlock=    41.38 ns/op (  24.17 M/s)  Fabric=    22.53 ns/op (  44.39 M/s)  Fabric/row=  0.54x  retry/success=  0.1439  PASS
+    threads= 7  rowlock=    38.54 ns/op (  25.94 M/s)  Fabric=    21.17 ns/op (  47.23 M/s)  Fabric/row=  0.55x  retry/success=  0.1930  PASS
+    threads= 8  rowlock=    37.18 ns/op (  26.90 M/s)  Fabric=    21.71 ns/op (  46.06 M/s)  Fabric/row=  0.58x  retry/success=  0.7065  PASS
+    threads= 9  rowlock=    37.84 ns/op (  26.42 M/s)  Fabric=    17.05 ns/op (  58.63 M/s)  Fabric/row=  0.45x  retry/success=  0.2157  PASS
+    threads=10  rowlock=    33.96 ns/op (  29.44 M/s)  Fabric=    16.32 ns/op (  61.26 M/s)  Fabric/row=  0.48x  retry/success=  0.2549  PASS
+    threads=11  rowlock=    33.50 ns/op (  29.85 M/s)  Fabric=    17.10 ns/op (  58.47 M/s)  Fabric/row=  0.51x  retry/success=  0.2966  PASS
+    threads=12  rowlock=    31.64 ns/op (  31.60 M/s)  Fabric=    17.34 ns/op (  57.66 M/s)  Fabric/row=  0.55x  retry/success=  0.5062  PASS
+    threads=13  rowlock=    33.36 ns/op (  29.97 M/s)  Fabric=    16.69 ns/op (  59.92 M/s)  Fabric/row=  0.50x  retry/success=  0.3510  PASS
+    threads=14  rowlock=    31.07 ns/op (  32.19 M/s)  Fabric=    14.35 ns/op (  69.67 M/s)  Fabric/row=  0.46x  retry/success=  0.3508  PASS
+    threads=15  rowlock=    30.17 ns/op (  33.14 M/s)  Fabric=    17.90 ns/op (  55.88 M/s)  Fabric/row=  0.59x  retry/success=  1.4502  PASS
+    threads=16  rowlock=    30.22 ns/op (  33.09 M/s)  Fabric=    15.49 ns/op (  64.56 M/s)  Fabric/row=  0.51x  retry/success=  0.5634  PASS
+
+  CASE 4/4  N=10000  K=32  parent-pool=100
+    threads= 1  rowlock=    39.06 ns/op (  25.60 M/s)  Fabric=    75.65 ns/op (  13.22 M/s)  Fabric/row=  1.94x  retry/success=  0.0000  PASS
+    threads= 2  rowlock=    75.23 ns/op (  13.29 M/s)  Fabric=    61.56 ns/op (  16.25 M/s)  Fabric/row=  0.82x  retry/success=  0.0239  PASS
+    threads= 3  rowlock=    57.46 ns/op (  17.40 M/s)  Fabric=    43.31 ns/op (  23.09 M/s)  Fabric/row=  0.75x  retry/success=  0.0539  PASS
+    threads= 4  rowlock=    49.69 ns/op (  20.13 M/s)  Fabric=    50.43 ns/op (  19.83 M/s)  Fabric/row=  1.02x  retry/success=  0.0791  PASS
+    threads= 5  rowlock=    45.45 ns/op (  22.00 M/s)  Fabric=    33.81 ns/op (  29.58 M/s)  Fabric/row=  0.74x  retry/success=  0.1777  PASS
+    threads= 6  rowlock=    49.83 ns/op (  20.07 M/s)  Fabric=    29.90 ns/op (  33.44 M/s)  Fabric/row=  0.60x  retry/success=  0.1766  PASS
+    threads= 7  rowlock=    40.88 ns/op (  24.46 M/s)  Fabric=    24.28 ns/op (  41.18 M/s)  Fabric/row=  0.59x  retry/success=  0.2178  PASS
+    threads= 8  rowlock=    37.11 ns/op (  26.95 M/s)  Fabric=    30.08 ns/op (  33.24 M/s)  Fabric/row=  0.81x  retry/success=  0.4996  PASS
+    threads= 9  rowlock=    33.61 ns/op (  29.75 M/s)  Fabric=    22.45 ns/op (  44.55 M/s)  Fabric/row=  0.67x  retry/success=  0.2592  PASS
+    threads=10  rowlock=    33.92 ns/op (  29.48 M/s)  Fabric=    21.18 ns/op (  47.22 M/s)  Fabric/row=  0.62x  retry/success=  0.3794  PASS
+    threads=11  rowlock=    32.24 ns/op (  31.02 M/s)  Fabric=    22.97 ns/op (  43.54 M/s)  Fabric/row=  0.71x  retry/success=  0.3565  PASS
+    threads=12  rowlock=    32.03 ns/op (  31.22 M/s)  Fabric=    20.42 ns/op (  48.96 M/s)  Fabric/row=  0.64x  retry/success=  0.7446  PASS
+    threads=13  rowlock=    31.99 ns/op (  31.26 M/s)  Fabric=    17.74 ns/op (  56.38 M/s)  Fabric/row=  0.55x  retry/success=  0.4654  PASS
+    threads=14  rowlock=    30.63 ns/op (  32.65 M/s)  Fabric=    18.63 ns/op (  53.68 M/s)  Fabric/row=  0.61x  retry/success=  0.4488  PASS
+    threads=15  rowlock=    31.88 ns/op (  31.37 M/s)  Fabric=    17.23 ns/op (  58.04 M/s)  Fabric/row=  0.54x  retry/success=  0.4547  PASS
+    threads=16  rowlock=    29.37 ns/op (  34.05 M/s)  Fabric=    19.25 ns/op (  51.95 M/s)  Fabric/row=  0.66x  retry/success=  0.6222  PASS
+
+TEST 2B OVERALL: PASS
+
+TEST 2 OVERALL: PASS
+
+================================================================================
+TEST 3A - HOTSPOT STABLE READS WITH TWO ACTIVE WRITERS
+================================================================================
+Exactly two writers remain active: H toggles 0<->1 and V toggles 2<->3
+on the same child. Readers sweep 1..(usable_threads-2). The vector baseline
+uses row-local shared_mutex shared reads and exclusive writer ownership.
+
+  CASE 1/4  N=100  K=4  parent-pool=4
+    readers= 1  row-rw= 16057.92 ns (   0.06 M/s)  Fabric=    83.12 ns (  12.03 M/s)  Fabric/row=  0.01x  retry/read=  0.2502  starve row/Fabric=0/0  writers M/s row/Fabric=18.42/13.12  correctness=PASS  progress=PASS  PASS
+    readers= 2  row-rw=  8121.55 ns (   0.12 M/s)  Fabric=    49.04 ns (  20.39 M/s)  Fabric/row=  0.01x  retry/read=  0.2394  starve row/Fabric=0/0  writers M/s row/Fabric=5.20/10.36  correctness=PASS  progress=PASS  PASS
+    readers= 3  row-rw=  3761.73 ns (   0.27 M/s)  Fabric=    39.36 ns (  25.40 M/s)  Fabric/row=  0.01x  retry/read=  0.3456  starve row/Fabric=0/0  writers M/s row/Fabric=10.98/9.50  correctness=PASS  progress=PASS  PASS
+    readers= 4  row-rw=  3600.54 ns (   0.28 M/s)  Fabric=    34.44 ns (  29.03 M/s)  Fabric/row=  0.01x  retry/read=  0.3012  starve row/Fabric=0/0  writers M/s row/Fabric=11.00/8.36  correctness=PASS  progress=PASS  PASS
+    readers= 5  row-rw=  1946.99 ns (   0.51 M/s)  Fabric=    27.22 ns (  36.73 M/s)  Fabric/row=  0.01x  retry/read=  0.2246  starve row/Fabric=0/0  writers M/s row/Fabric=13.23/8.15  correctness=PASS  progress=PASS  PASS
+    readers= 6  row-rw=  1612.24 ns (   0.62 M/s)  Fabric=    21.49 ns (  46.53 M/s)  Fabric/row=  0.01x  retry/read=  0.2755  starve row/Fabric=0/0  writers M/s row/Fabric=11.30/6.95  correctness=PASS  progress=PASS  PASS
+    readers= 7  row-rw=   779.44 ns (   1.28 M/s)  Fabric=    20.92 ns (  47.81 M/s)  Fabric/row=  0.03x  retry/read=  0.3384  starve row/Fabric=0/0  writers M/s row/Fabric=2.44/6.94  correctness=PASS  progress=PASS  PASS
+    readers= 8  row-rw=   581.12 ns (   1.72 M/s)  Fabric=    20.79 ns (  48.10 M/s)  Fabric/row=  0.04x  retry/read=  0.1387  starve row/Fabric=0/0  writers M/s row/Fabric=11.62/7.30  correctness=PASS  progress=PASS  PASS
+    readers= 9  row-rw=   806.35 ns (   1.24 M/s)  Fabric=    22.41 ns (  44.62 M/s)  Fabric/row=  0.03x  retry/read=  0.2806  starve row/Fabric=0/0  writers M/s row/Fabric=4.80/6.26  correctness=PASS  progress=PASS  PASS
+    readers=10  row-rw=   496.41 ns (   2.01 M/s)  Fabric=    23.65 ns (  42.28 M/s)  Fabric/row=  0.05x  retry/read=  0.2147  starve row/Fabric=0/0  writers M/s row/Fabric=6.37/6.07  correctness=PASS  progress=PASS  PASS
+    readers=11  row-rw=   325.49 ns (   3.07 M/s)  Fabric=    16.80 ns (  59.51 M/s)  Fabric/row=  0.05x  retry/read=  0.1631  starve row/Fabric=0/0  writers M/s row/Fabric=6.95/6.64  correctness=PASS  progress=PASS  PASS
+    readers=12  row-rw=   335.10 ns (   2.98 M/s)  Fabric=    24.40 ns (  40.98 M/s)  Fabric/row=  0.07x  retry/read=  0.3711  starve row/Fabric=0/0  writers M/s row/Fabric=11.83/5.86  correctness=PASS  progress=PASS  PASS
+    readers=13  row-rw=   443.78 ns (   2.25 M/s)  Fabric=    13.61 ns (  73.46 M/s)  Fabric/row=  0.03x  retry/read=  0.2202  starve row/Fabric=0/0  writers M/s row/Fabric=6.14/5.80  correctness=PASS  progress=PASS  PASS
+    readers=14  row-rw=   339.01 ns (   2.95 M/s)  Fabric=    12.42 ns (  80.53 M/s)  Fabric/row=  0.04x  retry/read=  0.1710  starve row/Fabric=0/0  writers M/s row/Fabric=7.96/6.90  correctness=PASS  progress=PASS  PASS
+    readers=15  row-rw=   300.93 ns (   3.32 M/s)  Fabric=    11.09 ns (  90.14 M/s)  Fabric/row=  0.04x  retry/read=  0.1708  starve row/Fabric=0/0  writers M/s row/Fabric=9.11/5.51  correctness=PASS  progress=PASS  PASS
+    readers=16  row-rw=   368.81 ns (   2.71 M/s)  Fabric=    11.27 ns (  88.71 M/s)  Fabric/row=  0.03x  retry/read=  0.3133  starve row/Fabric=0/0  writers M/s row/Fabric=10.14/5.96  correctness=PASS  progress=PASS  PASS
+
+  CASE 2/4  N=100  K=32  parent-pool=4
+    readers= 1  row-rw= 15778.15 ns (   0.06 M/s)  Fabric=    97.17 ns (  10.29 M/s)  Fabric/row=  0.01x  retry/read=  0.5106  starve row/Fabric=0/0  writers M/s row/Fabric=17.55/12.69  correctness=PASS  progress=PASS  PASS
+    readers= 2  row-rw=  8806.92 ns (   0.11 M/s)  Fabric=    52.36 ns (  19.10 M/s)  Fabric/row=  0.01x  retry/read=  0.3918  starve row/Fabric=0/0  writers M/s row/Fabric=4.36/10.31  correctness=PASS  progress=PASS  PASS
+    readers= 3  row-rw=  5817.70 ns (   0.17 M/s)  Fabric=    43.72 ns (  22.87 M/s)  Fabric/row=  0.01x  retry/read=  0.5121  starve row/Fabric=0/0  writers M/s row/Fabric=7.99/9.44  correctness=PASS  progress=PASS  PASS
+    readers= 4  row-rw=  2614.18 ns (   0.38 M/s)  Fabric=    35.56 ns (  28.12 M/s)  Fabric/row=  0.01x  retry/read=  0.4223  starve row/Fabric=0/0  writers M/s row/Fabric=12.47/7.98  correctness=PASS  progress=PASS  PASS
+    readers= 5  row-rw=  1523.12 ns (   0.66 M/s)  Fabric=    37.56 ns (  26.62 M/s)  Fabric/row=  0.02x  retry/read=  0.4322  starve row/Fabric=0/0  writers M/s row/Fabric=3.78/6.61  correctness=PASS  progress=PASS  PASS
+    readers= 6  row-rw=  1138.21 ns (   0.88 M/s)  Fabric=    28.53 ns (  35.05 M/s)  Fabric/row=  0.03x  retry/read=  0.7112  starve row/Fabric=0/0  writers M/s row/Fabric=12.51/6.65  correctness=PASS  progress=PASS  PASS
+    readers= 7  row-rw=  1019.45 ns (   0.98 M/s)  Fabric=    30.07 ns (  33.26 M/s)  Fabric/row=  0.03x  retry/read=  0.5110  starve row/Fabric=0/0  writers M/s row/Fabric=4.36/7.70  correctness=PASS  progress=PASS  PASS
+    readers= 8  row-rw=   525.06 ns (   1.90 M/s)  Fabric=    18.92 ns (  52.86 M/s)  Fabric/row=  0.04x  retry/read=  0.5891  starve row/Fabric=0/0  writers M/s row/Fabric=10.88/6.76  correctness=PASS  progress=PASS  PASS
+    readers= 9  row-rw=   670.18 ns (   1.49 M/s)  Fabric=    17.45 ns (  57.29 M/s)  Fabric/row=  0.03x  retry/read=  0.5487  starve row/Fabric=0/0  writers M/s row/Fabric=12.52/6.49  correctness=PASS  progress=PASS  PASS
+    readers=10  row-rw=   680.45 ns (   1.47 M/s)  Fabric=    22.17 ns (  45.11 M/s)  Fabric/row=  0.03x  retry/read=  0.5015  starve row/Fabric=0/0  writers M/s row/Fabric=11.89/6.94  correctness=PASS  progress=PASS  PASS
+    readers=11  row-rw=   470.98 ns (   2.12 M/s)  Fabric=    26.20 ns (  38.17 M/s)  Fabric/row=  0.06x  retry/read=  0.4256  starve row/Fabric=0/0  writers M/s row/Fabric=10.60/6.00  correctness=PASS  progress=PASS  PASS
+    readers=12  row-rw=   255.15 ns (   3.92 M/s)  Fabric=    13.26 ns (  75.40 M/s)  Fabric/row=  0.05x  retry/read=  0.3667  starve row/Fabric=0/0  writers M/s row/Fabric=3.40/6.36  correctness=PASS  progress=PASS  PASS
+    readers=13  row-rw=   348.37 ns (   2.87 M/s)  Fabric=    15.91 ns (  62.85 M/s)  Fabric/row=  0.05x  retry/read=  0.2950  starve row/Fabric=0/0  writers M/s row/Fabric=7.39/5.98  correctness=PASS  progress=PASS  PASS
+    readers=14  row-rw=   125.88 ns (   7.94 M/s)  Fabric=    12.69 ns (  78.81 M/s)  Fabric/row=  0.10x  retry/read=  0.4482  starve row/Fabric=0/0  writers M/s row/Fabric=3.10/6.21  correctness=PASS  progress=PASS  PASS
+    readers=15  row-rw=   136.48 ns (   7.33 M/s)  Fabric=    11.73 ns (  85.23 M/s)  Fabric/row=  0.09x  retry/read=  0.4199  starve row/Fabric=0/0  writers M/s row/Fabric=6.59/6.01  correctness=PASS  progress=PASS  PASS
+    readers=16  row-rw=   406.26 ns (   2.46 M/s)  Fabric=    15.94 ns (  62.72 M/s)  Fabric/row=  0.04x  retry/read=  0.3947  starve row/Fabric=0/0  writers M/s row/Fabric=6.33/6.25  correctness=PASS  progress=PASS  PASS
+
+  CASE 3/4  N=10000  K=4  parent-pool=4
+    readers= 1  row-rw= 10993.91 ns (   0.09 M/s)  Fabric=    73.20 ns (  13.66 M/s)  Fabric/row=  0.01x  retry/read=  0.1325  starve row/Fabric=0/0  writers M/s row/Fabric=17.57/11.49  correctness=PASS  progress=PASS  PASS
+    readers= 2  row-rw=  7945.96 ns (   0.13 M/s)  Fabric=    43.90 ns (  22.78 M/s)  Fabric/row=  0.01x  retry/read=  0.2180  starve row/Fabric=0/0  writers M/s row/Fabric=5.88/10.55  correctness=PASS  progress=PASS  PASS
+    readers= 3  row-rw=  5559.56 ns (   0.18 M/s)  Fabric=    43.69 ns (  22.89 M/s)  Fabric/row=  0.01x  retry/read=  0.3366  starve row/Fabric=0/0  writers M/s row/Fabric=6.99/8.86  correctness=PASS  progress=PASS  PASS
+    readers= 4  row-rw=  2700.02 ns (   0.37 M/s)  Fabric=    32.35 ns (  30.91 M/s)  Fabric/row=  0.01x  retry/read=  0.2409  starve row/Fabric=0/0  writers M/s row/Fabric=11.38/8.57  correctness=PASS  progress=PASS  PASS
+    readers= 5  row-rw=  2039.56 ns (   0.49 M/s)  Fabric=    22.82 ns (  43.83 M/s)  Fabric/row=  0.01x  retry/read=  0.1518  starve row/Fabric=0/0  writers M/s row/Fabric=12.39/8.07  correctness=PASS  progress=PASS  PASS
+    readers= 6  row-rw=  1064.16 ns (   0.94 M/s)  Fabric=    22.31 ns (  44.83 M/s)  Fabric/row=  0.02x  retry/read=  0.2345  starve row/Fabric=0/0  writers M/s row/Fabric=10.34/7.98  correctness=PASS  progress=PASS  PASS
+    readers= 7  row-rw=  1128.39 ns (   0.89 M/s)  Fabric=    26.04 ns (  38.40 M/s)  Fabric/row=  0.02x  retry/read=  0.2277  starve row/Fabric=0/0  writers M/s row/Fabric=16.54/7.07  correctness=PASS  progress=PASS  PASS
+    readers= 8  row-rw=   945.28 ns (   1.06 M/s)  Fabric=    20.51 ns (  48.76 M/s)  Fabric/row=  0.02x  retry/read=  0.2284  starve row/Fabric=0/0  writers M/s row/Fabric=8.36/6.08  correctness=PASS  progress=PASS  PASS
+    readers= 9  row-rw=   307.34 ns (   3.25 M/s)  Fabric=    22.23 ns (  44.98 M/s)  Fabric/row=  0.07x  retry/read=  0.2257  starve row/Fabric=0/0  writers M/s row/Fabric=10.51/7.24  correctness=PASS  progress=PASS  PASS
+    readers=10  row-rw=   195.93 ns (   5.10 M/s)  Fabric=    16.67 ns (  59.98 M/s)  Fabric/row=  0.09x  retry/read=  0.2443  starve row/Fabric=0/0  writers M/s row/Fabric=4.81/7.05  correctness=PASS  progress=PASS  PASS
+    readers=11  row-rw=   192.99 ns (   5.18 M/s)  Fabric=    13.20 ns (  75.75 M/s)  Fabric/row=  0.07x  retry/read=  0.2041  starve row/Fabric=0/0  writers M/s row/Fabric=11.37/6.34  correctness=PASS  progress=PASS  PASS
+    readers=12  row-rw=   134.08 ns (   7.46 M/s)  Fabric=    18.03 ns (  55.47 M/s)  Fabric/row=  0.13x  retry/read=  0.2098  starve row/Fabric=0/0  writers M/s row/Fabric=3.99/5.34  correctness=PASS  progress=PASS  PASS
+    readers=13  row-rw=   374.33 ns (   2.67 M/s)  Fabric=    19.44 ns (  51.43 M/s)  Fabric/row=  0.05x  retry/read=  0.2232  starve row/Fabric=0/0  writers M/s row/Fabric=8.70/5.90  correctness=PASS  progress=PASS  PASS
+    readers=14  row-rw=   435.05 ns (   2.30 M/s)  Fabric=    10.43 ns (  95.85 M/s)  Fabric/row=  0.02x  retry/read=  0.1256  starve row/Fabric=0/0  writers M/s row/Fabric=13.38/5.83  correctness=PASS  progress=PASS  PASS
+    readers=15  row-rw=   233.34 ns (   4.29 M/s)  Fabric=    12.05 ns (  82.97 M/s)  Fabric/row=  0.05x  retry/read=  0.2359  starve row/Fabric=0/0  writers M/s row/Fabric=10.40/5.75  correctness=PASS  progress=PASS  PASS
+    readers=16  row-rw=   294.55 ns (   3.40 M/s)  Fabric=    11.71 ns (  85.38 M/s)  Fabric/row=  0.04x  retry/read=  0.2857  starve row/Fabric=0/0  writers M/s row/Fabric=9.27/6.40  correctness=PASS  progress=PASS  PASS
+
+  CASE 4/4  N=10000  K=32  parent-pool=4
+    readers= 1  row-rw= 13897.21 ns (   0.07 M/s)  Fabric=    96.90 ns (  10.32 M/s)  Fabric/row=  0.01x  retry/read=  0.5942  starve row/Fabric=0/0  writers M/s row/Fabric=16.87/12.38  correctness=PASS  progress=PASS  PASS
+    readers= 2  row-rw=  7208.77 ns (   0.14 M/s)  Fabric=    49.55 ns (  20.18 M/s)  Fabric/row=  0.01x  retry/read=  0.4595  starve row/Fabric=0/0  writers M/s row/Fabric=4.66/10.12  correctness=PASS  progress=PASS  PASS
+    readers= 3  row-rw=  4136.66 ns (   0.24 M/s)  Fabric=    45.46 ns (  22.00 M/s)  Fabric/row=  0.01x  retry/read=  0.6026  starve row/Fabric=0/0  writers M/s row/Fabric=7.38/9.21  correctness=PASS  progress=PASS  PASS
+    readers= 4  row-rw=  2699.10 ns (   0.37 M/s)  Fabric=    35.07 ns (  28.51 M/s)  Fabric/row=  0.01x  retry/read=  0.5525  starve row/Fabric=0/0  writers M/s row/Fabric=10.59/8.40  correctness=PASS  progress=PASS  PASS
+    readers= 5  row-rw=  2555.16 ns (   0.39 M/s)  Fabric=    29.43 ns (  33.98 M/s)  Fabric/row=  0.01x  retry/read=  0.5523  starve row/Fabric=0/0  writers M/s row/Fabric=5.94/7.49  correctness=PASS  progress=PASS  PASS
+    readers= 6  row-rw=  1075.46 ns (   0.93 M/s)  Fabric=    26.13 ns (  38.28 M/s)  Fabric/row=  0.02x  retry/read=  0.5790  starve row/Fabric=0/0  writers M/s row/Fabric=8.60/7.75  correctness=PASS  progress=PASS  PASS
+    readers= 7  row-rw=   825.06 ns (   1.21 M/s)  Fabric=    25.46 ns (  39.28 M/s)  Fabric/row=  0.03x  retry/read=  0.4836  starve row/Fabric=0/0  writers M/s row/Fabric=10.02/7.41  correctness=PASS  progress=PASS  PASS
+    readers= 8  row-rw=   778.96 ns (   1.28 M/s)  Fabric=    23.36 ns (  42.81 M/s)  Fabric/row=  0.03x  retry/read=  0.5815  starve row/Fabric=0/0  writers M/s row/Fabric=8.59/7.06  correctness=PASS  progress=PASS  PASS
+    readers= 9  row-rw=   514.07 ns (   1.95 M/s)  Fabric=    24.43 ns (  40.93 M/s)  Fabric/row=  0.05x  retry/read=  0.4041  starve row/Fabric=0/0  writers M/s row/Fabric=10.35/6.78  correctness=PASS  progress=PASS  PASS
+    readers=10  row-rw=   319.61 ns (   3.13 M/s)  Fabric=    23.88 ns (  41.88 M/s)  Fabric/row=  0.07x  retry/read=  0.5913  starve row/Fabric=0/0  writers M/s row/Fabric=4.88/6.72  correctness=PASS  progress=PASS  PASS
+    readers=11  row-rw=   291.81 ns (   3.43 M/s)  Fabric=    16.61 ns (  60.22 M/s)  Fabric/row=  0.06x  retry/read=  0.6007  starve row/Fabric=0/0  writers M/s row/Fabric=13.52/6.91  correctness=PASS  progress=PASS  PASS
+    readers=12  row-rw=   252.48 ns (   3.96 M/s)  Fabric=    14.21 ns (  70.35 M/s)  Fabric/row=  0.06x  retry/read=  0.6341  starve row/Fabric=0/0  writers M/s row/Fabric=4.23/6.27  correctness=PASS  progress=PASS  PASS
+    readers=13  row-rw=   409.59 ns (   2.44 M/s)  Fabric=    18.18 ns (  55.00 M/s)  Fabric/row=  0.04x  retry/read=  0.5452  starve row/Fabric=0/0  writers M/s row/Fabric=7.33/6.48  correctness=PASS  progress=PASS  PASS
+    readers=14  row-rw=   218.51 ns (   4.58 M/s)  Fabric=    12.12 ns (  82.51 M/s)  Fabric/row=  0.06x  retry/read=  0.4105  starve row/Fabric=0/0  writers M/s row/Fabric=9.03/6.03  correctness=PASS  progress=PASS  PASS
+    readers=15  row-rw=   396.40 ns (   2.52 M/s)  Fabric=    19.54 ns (  51.18 M/s)  Fabric/row=  0.05x  retry/read=  0.3469  starve row/Fabric=0/0  writers M/s row/Fabric=10.82/6.26  correctness=PASS  progress=PASS  PASS
+    readers=16  row-rw=   189.95 ns (   5.26 M/s)  Fabric=    11.64 ns (  85.88 M/s)  Fabric/row=  0.06x  retry/read=  0.5088  starve row/Fabric=0/0  writers M/s row/Fabric=4.64/6.00  correctness=PASS  progress=PASS  PASS
+
+TEST 3A OVERALL: PASS
+
+================================================================================
+TEST 3B - DISTRIBUTED STABLE READS WITH TWO ACTIVE WRITERS
+================================================================================
+Two writers own separate child relations and mutate across up to 100 legal
+parents. Readers sweep every count from 1 through usable_threads-2; APC RETRY
+outcomes are retried and never counted as successful stable reads.
+
+  CASE 1/4  N=100  K=4  parent-pool=98
+    readers= 1  row-rw= 16481.74 ns (   0.06 M/s)  Fabric=    86.44 ns (  11.57 M/s)  Fabric/row=  0.01x  retry/read=  0.2521  starve row/Fabric=0/0  writers M/s row/Fabric=18.02/12.99  correctness=PASS  progress=PASS  PASS
+    readers= 2  row-rw= 10838.24 ns (   0.09 M/s)  Fabric=    45.67 ns (  21.90 M/s)  Fabric/row=  0.00x  retry/read=  0.1848  starve row/Fabric=0/0  writers M/s row/Fabric=8.43/10.68  correctness=PASS  progress=PASS  PASS
+    readers= 3  row-rw=  5655.63 ns (   0.18 M/s)  Fabric=    34.88 ns (  28.67 M/s)  Fabric/row=  0.01x  retry/read=  0.1765  starve row/Fabric=0/0  writers M/s row/Fabric=10.93/10.52  correctness=PASS  progress=PASS  PASS
+    readers= 4  row-rw=  3124.57 ns (   0.32 M/s)  Fabric=    29.24 ns (  34.20 M/s)  Fabric/row=  0.01x  retry/read=  0.1631  starve row/Fabric=0/0  writers M/s row/Fabric=11.22/7.70  correctness=PASS  progress=PASS  PASS
+    readers= 5  row-rw=  1997.36 ns (   0.50 M/s)  Fabric=    26.64 ns (  37.53 M/s)  Fabric/row=  0.01x  retry/read=  0.4577  starve row/Fabric=0/0  writers M/s row/Fabric=12.66/6.88  correctness=PASS  progress=PASS  PASS
+    readers= 6  row-rw=   893.32 ns (   1.12 M/s)  Fabric=    21.99 ns (  45.48 M/s)  Fabric/row=  0.02x  retry/read=  0.2358  starve row/Fabric=0/0  writers M/s row/Fabric=12.44/7.89  correctness=PASS  progress=PASS  PASS
+    readers= 7  row-rw=   834.42 ns (   1.20 M/s)  Fabric=    23.57 ns (  42.42 M/s)  Fabric/row=  0.03x  retry/read=  0.2940  starve row/Fabric=0/0  writers M/s row/Fabric=10.26/6.84  correctness=PASS  progress=PASS  PASS
+    readers= 8  row-rw=   954.25 ns (   1.05 M/s)  Fabric=    22.61 ns (  44.22 M/s)  Fabric/row=  0.02x  retry/read=  0.2957  starve row/Fabric=0/0  writers M/s row/Fabric=5.67/7.43  correctness=PASS  progress=PASS  PASS
+    readers= 9  row-rw=   646.92 ns (   1.55 M/s)  Fabric=    15.44 ns (  64.77 M/s)  Fabric/row=  0.02x  retry/read=  0.2157  starve row/Fabric=0/0  writers M/s row/Fabric=5.12/7.04  correctness=PASS  progress=PASS  PASS
+    readers=10  row-rw=   377.43 ns (   2.65 M/s)  Fabric=    20.64 ns (  48.44 M/s)  Fabric/row=  0.05x  retry/read=  0.3071  starve row/Fabric=0/0  writers M/s row/Fabric=10.66/6.55  correctness=PASS  progress=PASS  PASS
+    readers=11  row-rw=   510.61 ns (   1.96 M/s)  Fabric=    13.29 ns (  75.27 M/s)  Fabric/row=  0.03x  retry/read=  0.2634  starve row/Fabric=0/0  writers M/s row/Fabric=11.34/6.51  correctness=PASS  progress=PASS  PASS
+    readers=12  row-rw=   286.67 ns (   3.49 M/s)  Fabric=    19.42 ns (  51.50 M/s)  Fabric/row=  0.07x  retry/read=  0.1821  starve row/Fabric=0/0  writers M/s row/Fabric=5.72/6.96  correctness=PASS  progress=PASS  PASS
+    readers=13  row-rw=   316.16 ns (   3.16 M/s)  Fabric=    19.94 ns (  50.16 M/s)  Fabric/row=  0.06x  retry/read=  0.2957  starve row/Fabric=0/0  writers M/s row/Fabric=10.53/5.99  correctness=PASS  progress=PASS  PASS
+    readers=14  row-rw=   266.99 ns (   3.75 M/s)  Fabric=    13.45 ns (  74.36 M/s)  Fabric/row=  0.05x  retry/read=  0.2567  starve row/Fabric=0/0  writers M/s row/Fabric=6.26/6.03  correctness=PASS  progress=PASS  PASS
+    readers=15  row-rw=   285.40 ns (   3.50 M/s)  Fabric=     9.30 ns ( 107.56 M/s)  Fabric/row=  0.03x  retry/read=  0.2117  starve row/Fabric=0/0  writers M/s row/Fabric=12.27/5.68  correctness=PASS  progress=PASS  PASS
+    readers=16  row-rw=   203.74 ns (   4.91 M/s)  Fabric=    13.16 ns (  75.96 M/s)  Fabric/row=  0.06x  retry/read=  0.2098  starve row/Fabric=0/0  writers M/s row/Fabric=13.65/5.85  correctness=PASS  progress=PASS  PASS
+
+  CASE 2/4  N=100  K=32  parent-pool=98
+    readers= 1  row-rw= 16605.53 ns (   0.06 M/s)  Fabric=    98.90 ns (  10.11 M/s)  Fabric/row=  0.01x  retry/read=  0.4682  starve row/Fabric=0/0  writers M/s row/Fabric=16.25/12.70  correctness=PASS  progress=PASS  PASS
+    readers= 2  row-rw=  7429.25 ns (   0.13 M/s)  Fabric=    55.04 ns (  18.17 M/s)  Fabric/row=  0.01x  retry/read=  0.4309  starve row/Fabric=0/0  writers M/s row/Fabric=3.89/9.88  correctness=PASS  progress=PASS  PASS
+    readers= 3  row-rw=  5124.43 ns (   0.20 M/s)  Fabric=    46.90 ns (  21.32 M/s)  Fabric/row=  0.01x  retry/read=  0.6675  starve row/Fabric=0/0  writers M/s row/Fabric=14.12/9.42  correctness=PASS  progress=PASS  PASS
+    readers= 4  row-rw=  2766.90 ns (   0.36 M/s)  Fabric=    40.60 ns (  24.63 M/s)  Fabric/row=  0.01x  retry/read=  0.7267  starve row/Fabric=0/0  writers M/s row/Fabric=14.27/8.18  correctness=PASS  progress=PASS  PASS
+    readers= 5  row-rw=  1011.06 ns (   0.99 M/s)  Fabric=    27.82 ns (  35.94 M/s)  Fabric/row=  0.03x  retry/read=  0.4035  starve row/Fabric=0/0  writers M/s row/Fabric=7.07/6.92  correctness=PASS  progress=PASS  PASS
+    readers= 6  row-rw=  1008.71 ns (   0.99 M/s)  Fabric=    29.86 ns (  33.49 M/s)  Fabric/row=  0.03x  retry/read=  0.5369  starve row/Fabric=0/0  writers M/s row/Fabric=7.63/7.31  correctness=PASS  progress=PASS  PASS
+    readers= 7  row-rw=   416.91 ns (   2.40 M/s)  Fabric=    32.54 ns (  30.73 M/s)  Fabric/row=  0.08x  retry/read=  0.6881  starve row/Fabric=0/0  writers M/s row/Fabric=10.79/7.14  correctness=PASS  progress=PASS  PASS
+    readers= 8  row-rw=   442.56 ns (   2.26 M/s)  Fabric=    20.81 ns (  48.05 M/s)  Fabric/row=  0.05x  retry/read=  0.6635  starve row/Fabric=0/0  writers M/s row/Fabric=8.29/6.93  correctness=PASS  progress=PASS  PASS
+    readers= 9  row-rw=   326.30 ns (   3.06 M/s)  Fabric=    19.65 ns (  50.90 M/s)  Fabric/row=  0.06x  retry/read=  0.4558  starve row/Fabric=0/0  writers M/s row/Fabric=8.27/6.71  correctness=PASS  progress=PASS  PASS
+    readers=10  row-rw=   475.43 ns (   2.10 M/s)  Fabric=    25.25 ns (  39.61 M/s)  Fabric/row=  0.05x  retry/read=  0.6342  starve row/Fabric=0/0  writers M/s row/Fabric=11.84/6.91  correctness=PASS  progress=PASS  PASS
+    readers=11  row-rw=   485.11 ns (   2.06 M/s)  Fabric=    17.21 ns (  58.11 M/s)  Fabric/row=  0.04x  retry/read=  0.8270  starve row/Fabric=0/0  writers M/s row/Fabric=8.04/6.59  correctness=PASS  progress=PASS  PASS
+    readers=12  row-rw=   261.48 ns (   3.82 M/s)  Fabric=    12.96 ns (  77.15 M/s)  Fabric/row=  0.05x  retry/read=  0.5360  starve row/Fabric=0/0  writers M/s row/Fabric=4.41/5.89  correctness=PASS  progress=PASS  PASS
+    readers=13  row-rw=   379.24 ns (   2.64 M/s)  Fabric=    17.08 ns (  58.56 M/s)  Fabric/row=  0.05x  retry/read=  0.6179  starve row/Fabric=0/0  writers M/s row/Fabric=12.93/6.43  correctness=PASS  progress=PASS  PASS
+    readers=14  row-rw=   247.83 ns (   4.04 M/s)  Fabric=    14.58 ns (  68.60 M/s)  Fabric/row=  0.06x  retry/read=  0.6771  starve row/Fabric=0/0  writers M/s row/Fabric=7.42/6.56  correctness=PASS  progress=PASS  PASS
+    readers=15  row-rw=   269.31 ns (   3.71 M/s)  Fabric=    13.22 ns (  75.65 M/s)  Fabric/row=  0.05x  retry/read=  0.4370  starve row/Fabric=0/0  writers M/s row/Fabric=4.43/6.36  correctness=PASS  progress=PASS  PASS
+    readers=16  row-rw=   236.85 ns (   4.22 M/s)  Fabric=    12.73 ns (  78.58 M/s)  Fabric/row=  0.05x  retry/read=  0.4801  starve row/Fabric=0/0  writers M/s row/Fabric=5.19/6.14  correctness=PASS  progress=PASS  PASS
+
+  CASE 3/4  N=10000  K=4  parent-pool=100
+    readers= 1  row-rw= 12129.79 ns (   0.08 M/s)  Fabric=    73.39 ns (  13.63 M/s)  Fabric/row=  0.01x  retry/read=  0.1886  starve row/Fabric=0/0  writers M/s row/Fabric=17.73/11.18  correctness=PASS  progress=PASS  PASS
+    readers= 2  row-rw= 10222.63 ns (   0.10 M/s)  Fabric=    41.88 ns (  23.88 M/s)  Fabric/row=  0.00x  retry/read=  0.1865  starve row/Fabric=0/0  writers M/s row/Fabric=3.57/10.77  correctness=PASS  progress=PASS  PASS
+    readers= 3  row-rw=  5668.13 ns (   0.18 M/s)  Fabric=    41.74 ns (  23.96 M/s)  Fabric/row=  0.01x  retry/read=  0.2359  starve row/Fabric=0/0  writers M/s row/Fabric=10.93/9.72  correctness=PASS  progress=PASS  PASS
+    readers= 4  row-rw=  3351.56 ns (   0.30 M/s)  Fabric=    34.40 ns (  29.07 M/s)  Fabric/row=  0.01x  retry/read=  0.2531  starve row/Fabric=0/0  writers M/s row/Fabric=2.69/7.91  correctness=PASS  progress=PASS  PASS
+    readers= 5  row-rw=   602.36 ns (   1.66 M/s)  Fabric=    24.64 ns (  40.58 M/s)  Fabric/row=  0.04x  retry/read=  0.1655  starve row/Fabric=0/0  writers M/s row/Fabric=13.05/7.55  correctness=PASS  progress=PASS  PASS
+    readers= 6  row-rw=  1268.39 ns (   0.79 M/s)  Fabric=    23.67 ns (  42.25 M/s)  Fabric/row=  0.02x  retry/read=  0.3120  starve row/Fabric=0/0  writers M/s row/Fabric=7.67/7.55  correctness=PASS  progress=PASS  PASS
+    readers= 7  row-rw=   627.41 ns (   1.59 M/s)  Fabric=    17.94 ns (  55.73 M/s)  Fabric/row=  0.03x  retry/read=  0.1264  starve row/Fabric=0/0  writers M/s row/Fabric=12.55/7.52  correctness=PASS  progress=PASS  PASS
+    readers= 8  row-rw=   387.75 ns (   2.58 M/s)  Fabric=    16.24 ns (  61.59 M/s)  Fabric/row=  0.04x  retry/read=  0.1329  starve row/Fabric=0/0  writers M/s row/Fabric=3.08/7.29  correctness=PASS  progress=PASS  PASS
+    readers= 9  row-rw=   464.72 ns (   2.15 M/s)  Fabric=    14.91 ns (  67.07 M/s)  Fabric/row=  0.03x  retry/read=  0.2285  starve row/Fabric=0/0  writers M/s row/Fabric=9.19/6.89  correctness=PASS  progress=PASS  PASS
+    readers=10  row-rw=   416.72 ns (   2.40 M/s)  Fabric=    15.72 ns (  63.60 M/s)  Fabric/row=  0.04x  retry/read=  0.1161  starve row/Fabric=0/0  writers M/s row/Fabric=7.98/5.92  correctness=PASS  progress=PASS  PASS
+    readers=11  row-rw=   595.64 ns (   1.68 M/s)  Fabric=    12.68 ns (  78.86 M/s)  Fabric/row=  0.02x  retry/read=  0.1932  starve row/Fabric=0/0  writers M/s row/Fabric=5.11/6.10  correctness=PASS  progress=PASS  PASS
+    readers=12  row-rw=   311.06 ns (   3.21 M/s)  Fabric=    12.56 ns (  79.60 M/s)  Fabric/row=  0.04x  retry/read=  0.2615  starve row/Fabric=0/0  writers M/s row/Fabric=5.05/6.52  correctness=PASS  progress=PASS  PASS
+    readers=13  row-rw=   320.76 ns (   3.12 M/s)  Fabric=    20.74 ns (  48.22 M/s)  Fabric/row=  0.06x  retry/read=  0.2049  starve row/Fabric=0/0  writers M/s row/Fabric=7.61/6.21  correctness=PASS  progress=PASS  PASS
+    readers=14  row-rw=   288.25 ns (   3.47 M/s)  Fabric=    12.29 ns (  81.34 M/s)  Fabric/row=  0.04x  retry/read=  0.1547  starve row/Fabric=0/0  writers M/s row/Fabric=11.26/5.94  correctness=PASS  progress=PASS  PASS
+    readers=15  row-rw=   193.88 ns (   5.16 M/s)  Fabric=    10.73 ns (  93.20 M/s)  Fabric/row=  0.06x  retry/read=  0.1560  starve row/Fabric=0/0  writers M/s row/Fabric=7.26/6.12  correctness=PASS  progress=PASS  PASS
+    readers=16  row-rw=   264.80 ns (   3.78 M/s)  Fabric=    14.43 ns (  69.32 M/s)  Fabric/row=  0.05x  retry/read=  0.2180  starve row/Fabric=0/0  writers M/s row/Fabric=4.64/5.69  correctness=PASS  progress=PASS  PASS
+
+  CASE 4/4  N=10000  K=32  parent-pool=100
+    readers= 1  row-rw= 12333.19 ns (   0.08 M/s)  Fabric=   100.07 ns (   9.99 M/s)  Fabric/row=  0.01x  retry/read=  0.4318  starve row/Fabric=0/0  writers M/s row/Fabric=16.93/12.51  correctness=PASS  progress=PASS  PASS
+    readers= 2  row-rw=  9569.64 ns (   0.10 M/s)  Fabric=    50.09 ns (  19.97 M/s)  Fabric/row=  0.01x  retry/read=  0.6654  starve row/Fabric=0/0  writers M/s row/Fabric=4.65/9.45  correctness=PASS  progress=PASS  PASS
+    readers= 3  row-rw=  4727.97 ns (   0.21 M/s)  Fabric=    48.51 ns (  20.61 M/s)  Fabric/row=  0.01x  retry/read=  0.6796  starve row/Fabric=0/0  writers M/s row/Fabric=7.74/8.92  correctness=PASS  progress=PASS  PASS
+    readers= 4  row-rw=  2170.23 ns (   0.46 M/s)  Fabric=    36.34 ns (  27.52 M/s)  Fabric/row=  0.02x  retry/read=  0.6825  starve row/Fabric=0/0  writers M/s row/Fabric=8.85/8.13  correctness=PASS  progress=PASS  PASS
+    readers= 5  row-rw=  2981.04 ns (   0.34 M/s)  Fabric=    33.93 ns (  29.47 M/s)  Fabric/row=  0.01x  retry/read=  0.7842  starve row/Fabric=0/0  writers M/s row/Fabric=12.29/7.95  correctness=PASS  progress=PASS  PASS
+    readers= 6  row-rw=  1564.33 ns (   0.64 M/s)  Fabric=    26.45 ns (  37.81 M/s)  Fabric/row=  0.02x  retry/read=  0.8221  starve row/Fabric=0/0  writers M/s row/Fabric=8.74/7.23  correctness=PASS  progress=PASS  PASS
+    readers= 7  row-rw=   998.10 ns (   1.00 M/s)  Fabric=    28.65 ns (  34.90 M/s)  Fabric/row=  0.03x  retry/read=  0.6550  starve row/Fabric=0/0  writers M/s row/Fabric=10.21/6.95  correctness=PASS  progress=PASS  PASS
+    readers= 8  row-rw=   251.33 ns (   3.98 M/s)  Fabric=    27.50 ns (  36.36 M/s)  Fabric/row=  0.11x  retry/read=  0.6014  starve row/Fabric=0/0  writers M/s row/Fabric=4.88/6.90  correctness=PASS  progress=PASS  PASS
+    readers= 9  row-rw=   360.59 ns (   2.77 M/s)  Fabric=    20.34 ns (  49.18 M/s)  Fabric/row=  0.06x  retry/read=  0.8051  starve row/Fabric=0/0  writers M/s row/Fabric=7.62/7.11  correctness=PASS  progress=PASS  PASS
+    readers=10  row-rw=   407.31 ns (   2.46 M/s)  Fabric=    20.78 ns (  48.13 M/s)  Fabric/row=  0.05x  retry/read=  0.5794  starve row/Fabric=0/0  writers M/s row/Fabric=4.22/6.51  correctness=PASS  progress=PASS  PASS
+    readers=11  row-rw=   537.24 ns (   1.86 M/s)  Fabric=    17.68 ns (  56.57 M/s)  Fabric/row=  0.03x  retry/read=  0.4564  starve row/Fabric=0/0  writers M/s row/Fabric=14.95/6.75  correctness=PASS  progress=PASS  PASS
+    readers=12  row-rw=   267.02 ns (   3.75 M/s)  Fabric=    15.02 ns (  66.58 M/s)  Fabric/row=  0.06x  retry/read=  0.5556  starve row/Fabric=0/0  writers M/s row/Fabric=8.21/6.54  correctness=PASS  progress=PASS  PASS
+    readers=13  row-rw=   314.17 ns (   3.18 M/s)  Fabric=    14.21 ns (  70.35 M/s)  Fabric/row=  0.05x  retry/read=  0.7176  starve row/Fabric=0/0  writers M/s row/Fabric=8.79/6.25  correctness=PASS  progress=PASS  PASS
+    readers=14  row-rw=   278.06 ns (   3.60 M/s)  Fabric=    23.78 ns (  42.06 M/s)  Fabric/row=  0.09x  retry/read=  0.5403  starve row/Fabric=0/0  writers M/s row/Fabric=9.86/5.83  correctness=PASS  progress=PASS  PASS
+    readers=15  row-rw=   128.88 ns (   7.76 M/s)  Fabric=    12.69 ns (  78.78 M/s)  Fabric/row=  0.10x  retry/read=  0.5583  starve row/Fabric=0/0  writers M/s row/Fabric=1.29/6.20  correctness=PASS  progress=PASS  PASS
+    readers=16  row-rw=   371.17 ns (   2.69 M/s)  Fabric=    15.54 ns (  64.33 M/s)  Fabric/row=  0.04x  retry/read=  0.7725  starve row/Fabric=0/0  writers M/s row/Fabric=12.33/6.01  correctness=PASS  progress=PASS  PASS
+
+TEST 3B OVERALL: PASS
+
+TEST 3 OVERALL: PASS
+
+================================================================================
+TEST 4 - PUBLIC DAG MUTATION API PAIRS AND MULTI-PARENT ISOLATION
+================================================================================
+  child-side and parent-side API symmetry : PASS
+  duplicate relation rejected             : PASS
+  third parent at K=2 rejected            : PASS
+  H/V rows remain independent             : PASS
+
+TEST 4 OVERALL: PASS
+
+================================================================================
+TEST 5 - H-UNION-V ACYCLIC DAG, MULTI-PARENT CAPACITY, CYCLE REJECTION
+================================================================================
+  legal mixed-axis diamond              : PASS
+  every backward/self insertion rejected: PASS
+  attempted H-union-V cycle rejected    : PASS
+  K=2 independently enforced on H and V : PASS
+  failed replacement preserves old edge : PASS
+  exhaustive public-read topological sort: PASS
+
+TEST 5 OVERALL: PASS
+
+================================================================================
+TEST 6 - REGION SCHEMA / DEVICE VIEW / PROTOCOL STORAGE / DTYPES
+================================================================================
+  8-cell header + 40-byte schema ABI     : PASS
+  Fabric construction validation         : PASS
+  invalid schema rollback + slot reuse   : PASS
+  compact rows + metadata + MPMC sequence: PASS
+  retirement/reuse clears data and schema: PASS
+
+  uint8_t    private=PASS atomic=PASS immutable=PASS
+  uint16_t   private=PASS atomic=PASS immutable=PASS
+  uint32_t   private=PASS atomic=PASS immutable=PASS
+  uint64_t   private=PASS atomic=PASS immutable=PASS
+  int8_t     private=PASS atomic=PASS immutable=PASS
+  int16_t    private=PASS atomic=PASS immutable=PASS
+  int32_t    private=PASS atomic=PASS immutable=PASS
+  int64_t    private=PASS atomic=PASS immutable=PASS
+  float      private=PASS atomic=PASS immutable=PASS
+  double     private=PASS atomic=PASS immutable=PASS
+  char       private=PASS atomic=PASS immutable=PASS
+
+TEST 6 OVERALL: PASS
+
+================================================================================
+TEST 7 - CONCURRENT H/V DAG MUTATION + RETIREMENT / ABA
+================================================================================
+  A--H-->B raced with illegal B--V-->A : PASS
+  shared-parent mixed H/V stress       : PASS
+  transaction retries observed         : 1193532
+  linked/pinned retirement + ABA reuse : PASS
+  direct slot/generation resolver + ABA: PASS
+  shutdown drains outstanding RegionView: PASS
+
+TEST 7 OVERALL: PASS
+
+================================================================================
+TEST 8 - FULL-SLAB SAVE / ATTACH / DETACH RELOCATION
+================================================================================
+  SaveFabric succeeds and source resumes       PASS
+  first attach uses different slab address     PASS
+  first relocated payload                      PASS
+  first relocated H topology                   PASS
+  DetachFabric preserves borrowed image        PASS
+  second attach uses another slab address      PASS
+  second relocated payload                     PASS
+  second relocated H topology                  PASS
+  address-independent slab image               PASS
+  wrong supplied cell count rejected           PASS
+  incompatible format version rejected         PASS
+  source address                               0x555db4745840
+  first relocated address                      0x555db4789450
+  second relocated address                     0x555db478d7d0
+
+TEST 8 OVERALL: PASS
+
+================================================================================
+SUPERNOVA APC/FABRIC SYSTEMS TEST SUITE SUMMARY
+================================================================================
+  Test 1 - scaled fair bidirectional DAG benchmark      PASS
+  Test 2 - hotspot + distributed mutation               PASS
+  Test 3 - hotspot + distributed readers                PASS
+  Test 4 - public mutation API                          PASS
+  Test 5 - combined DAG proof                           PASS
+  Test 6 - region schema and views                      PASS
+  Test 7 - concurrency and retirement                   PASS
+  Test 8 - full-slab relocation                         PASS
+
+  failures: 0
+================================================================================
+
+================================================================================
+GHGF PAPER VALIDATION TEST KIT - TESTS A-J
+================================================================================
+
+================================================================================
+TEST A - ZERO-RATE TRAINING IDENTITY
+================================================================================
+  maximum prediction difference                 0.000000000
+  zero-rate Train == Update                       PASS
+
+================================================================================
+TEST B - OBSERVATION BIAS / TONIC-DRIFT LEARNING
+================================================================================
+  learned mean probability                     0.799772
+  target probability                           0.800000
+  initial 0.5 loss                             0.693147
+  learned loss                                 0.500403
+  bias approaches empirical Bernoulli rate        PASS
+  bias learning lowers binary loss                PASS
+
+================================================================================
+TEST C - H-COUPLING INTERNAL LEARNING
+================================================================================
+  frozen coupling loss                         0.622450360
+  internally learned coupling loss             0.242711351
+  H coupling lowers cold-start loss               PASS
+
+================================================================================
+TEST D - H-COUPLING FINITE-DIFFERENCE DIRECTION
+================================================================================
+  loss(k-eps)                                  0.434476032
+  loss(k)                                      0.375584089
+  loss(k+eps)                                  0.328650135
+  numerical dLoss/dk                           -0.529129477
+  local-vs-preferred prediction dot            0.075516670
+  local learned loss                           0.258867369
+  finite difference has a resolvable direction    PASS
+  local H update moves toward better side         PASS
+  local H update lowers probe loss                PASS
+
+================================================================================
+TEST E - DRIFT / BIAS DIRECTION VS GLOBAL FIT ORACLE
+================================================================================
+  baseline loss                                0.693147181
+  local drift loss                             0.205894563
+  global-fit drift loss                        0.201413320
+  local/global prediction-direction dot        1.595081851
+  local drift lowers loss                         PASS
+  global drift fit lowers loss                    PASS
+  local drift agrees with global-fit direction    PASS
+
+================================================================================
+TEST F - TEMPORAL / AUTO-CONNECTION LEARNING
+================================================================================
+  fixed lambda loss                             0.734727850
+  locally learned lambda loss                   0.718385670
+  globally fitted lambda loss                   0.693147181
+  local/global prediction-direction dot         0.021128564
+  temporal learning lowers alternating loss       PASS
+  global temporal fit is non-regressive           PASS
+  local temporal direction agrees with fitter     PASS
+
+================================================================================
+TEST G - TONIC-VOLATILITY INTERNAL LEARNING
+================================================================================
+  fixed volatility loss                         0.708268304
+  locally learned volatility loss               0.708268287
+  globally fitted volatility loss               0.708156229
+  local prediction delta^2                      1.629985036e-11
+  local mean squared prediction effect          1.697901079e-13
+  local/global prediction-direction dot         -1.637016104e-06
+  tonic volatility has meaningful held-out effect FAIL
+  local volatility lowers held-out loss           FAIL
+  global volatility fit is non-regressive         PASS
+  global-fit direction diagnostic               DIFFERENT (not a hard failure)
+
+================================================================================
+TEST H - V-COUPLING INTERNAL LEARNING
+================================================================================
+  fixed V-coupling loss                         0.709934815
+  locally learned V-coupling loss               0.709934816
+  globally fitted V-coupling loss               0.698836984
+  local prediction delta^2                      5.561395788e-11
+  local mean squared prediction effect          4.344840460e-13
+  local/global prediction-direction dot         -6.192527529e-06
+  V coupling has meaningful held-out effect       FAIL
+  local V learning lowers held-out loss           FAIL
+  global V fit is non-regressive                  PASS
+  global-fit direction diagnostic               DIFFERENT (not a hard failure)
+
+================================================================================
+TEST I - ONLINE CONCURRENT PREDICTIVE-STRUCTURE LEARNING
+================================================================================
+  shallow validation loss                       0.601197296
+  shallow penalized score                       0.612204175
+  hierarchical validation loss                  0.482745418
+  hierarchical penalized score                  0.504759175
+  validation decision margin                    0.107445000
+  hierarchical held-out test loss               0.475848454
+  shallow held-out test loss                    0.597261258
+  concurrent elapsed seconds                    0.031242044
+  numeric successes / failed attempts           31934 / 834
+  snapshot success / retry / rejected           56236 / 9300 / 0
+  mutation success / retry / stale / rejected   32768 / 0 / 0 / 0
+  numeric attempts per second                   1048843.027043941
+  mutation attempts per second                  1048843.027043941
+  optimistic mutation contract is coherent        PASS
+  validation accepts live hierarchical edge       PASS
+  accepted edge improves untouched test data      PASS
+  same-model concurrent stress preserves invariantsPASS
+  NOTE: failed numeric attempts are reported, not relabeled as retries;
+        the numeric API returns bool and does not expose retry status.
+
+================================================================================
+TEST J - TIMING AND INDEPENDENT-MODEL PARALLELISM
+================================================================================
+  compiler                                       GCC 13.3.0
+  __cplusplus                                    202002
+  timed steps per worker                         32768
+  batch samples per time-step                    16
+  sequential median repetitions                 9
+  parallel median repetitions                   7
+  hardware_concurrency reported                 20
+  construction amortized ns/model               978.469116
+  predict+update median ns/time-step             426.485016
+  predict+update median M samples/s              37.515972
+  predict+train median ns/time-step              470.521179
+  predict+train median M samples/s               34.004845
+
+  Independent models; predict+train aggregate throughput:
+    threads=1   M samples/s=33.925673     speedup=1.000000    efficiency=1.000000
+    threads=2   M samples/s=63.657124     speedup=1.876370    efficiency=0.938185
+    threads=4   M samples/s=125.096246    speedup=3.687362    efficiency=0.921841
+    threads=8   M samples/s=232.511061    speedup=6.853543    efficiency=0.856693
+  sequential timing samples are valid             PASS
+  parallel workers completed valid workloads      PASS
+  NOTE: parallel rows use separate model instances; no same-model
+        thread-safety or latency claim is implied.
+
+================================================================================
+GHGF PAPER VALIDATION TEST SUMMARY
+================================================================================
+  Test A - zero-rate identity                     PASS  0.081 ms
+  Test B - observation bias                       PASS  0.102 ms
+  Test C - H coupling learning                    PASS  0.055 ms
+  Test D - H finite-difference direction          PASS  0.054 ms
+  Test E - drift/global-oracle agreement          PASS  0.391 ms
+  Test F - temporal parameter                     PASS  0.730 ms
+  Test G - tonic-volatility efficacy              FAIL  0.853 ms
+  Test H - V-coupling efficacy                    FAIL  1.763 ms
+  Test I - online concurrent structural learning  PASS  32.472 ms
+  Test J - timing/independent parallelism         PASS  768.296 ms
+
+  failures: 2
+================================================================================
+raf@DESKTOP-H53UEHL:/mnt/c/PAPER/LCIM-BitTheorium$ 
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+BENCHMARK CONTEXT
+  C++ language level      : 202002 (_MSVC_LANG)
+  legacy __cplusplus      : 199711
+  pointer width           : 64 bits
+  hardware_concurrency    : 20
+  uint64 atomic lock-free : YES
+  assertions              : disabled (NDEBUG)
+  compiler                : MSVC 1950
+  note                    : CPU model, clock policy, compiler flags, and OS
+                            should be recorded externally for publication.
+
+SUITE CONFIGURATION
+  node bounds             : 100 .. 10000
+  parent-capacity bounds  : 4 .. 32
+  usable threads          : 18
+  Test 2 writer sweep     : 1..16
+  Test 3 reader sweep     : 1..16 + 2 fixed writers
+  measured samples/point  : 4
+
+================================================================================
+TEST 1 - SCALED FAIR BIDIRECTIONAL DAG / 1 KiB PAYLOAD COMPARISON
+================================================================================
+Compact vector DAG vs minimal single-region SuperNova Fabric.
+Each case uses the same N, K, fully populated H/V bounded topology, and
+exactly 128 x uint64_t (1024 B) payload per node. Four measured samples
+are taken per row with backend order alternated.
+
+  CASE 1/4  N=100  K=4
+    edges/axis=390  payload/node=1024 B
+    storage vector/Fabric=113600/141440 B  Fabric/vector=1.25x
+  construction                vector=  34100.00 ns/op  Fabric=  81650.00 ns/op  Fabric/vector=   2.39x
+  H parent scan               vector=      0.63 ns/op  Fabric=     13.68 ns/op  Fabric/vector=  21.73x
+  V parent scan               vector=      0.62 ns/op  Fabric=     13.60 ns/op  Fabric/vector=  22.05x
+  H reverse-child scan        vector=      1.86 ns/op  Fabric=     14.29 ns/op  Fabric/vector=   7.70x
+  V reverse-child scan        vector=      1.96 ns/op  Fabric=     13.99 ns/op  Fabric/vector=   7.15x
+  payload direct read         vector=      0.76 ns/op  Fabric=      0.69 ns/op  Fabric/vector=   0.90x
+  payload atomic_ref read     vector=      0.77 ns/op  Fabric=      0.76 ns/op  Fabric/vector=   0.99x
+  H child + payload           vector=      2.03 ns/op  Fabric=     15.40 ns/op  Fabric/vector=   7.59x
+  H parent replace            vector=     13.87 ns/op  Fabric=    101.65 ns/op  Fabric/vector=   7.33x
+  V parent replace            vector=     13.66 ns/op  Fabric=     85.88 ns/op  Fabric/vector=   6.29x
+    integrity=PASS
+
+  CASE 2/4  N=100  K=32
+    edges/axis=2672  payload/node=1024 B
+    storage vector/Fabric=180800/231040 B  Fabric/vector=1.28x
+  construction                vector= 204250.00 ns/op  Fabric= 547050.00 ns/op  Fabric/vector=   2.68x
+  H parent scan               vector=      0.64 ns/op  Fabric=     13.07 ns/op  Fabric/vector=  20.35x
+  V parent scan               vector=      0.67 ns/op  Fabric=     12.99 ns/op  Fabric/vector=  19.32x
+  H reverse-child scan        vector=      2.31 ns/op  Fabric=     15.28 ns/op  Fabric/vector=   6.61x
+  V reverse-child scan        vector=      2.19 ns/op  Fabric=     15.26 ns/op  Fabric/vector=   6.98x
+  payload direct read         vector=      0.75 ns/op  Fabric=      0.68 ns/op  Fabric/vector=   0.91x
+  payload atomic_ref read     vector=      0.76 ns/op  Fabric=      0.76 ns/op  Fabric/vector=   1.00x
+  H child + payload           vector=      2.43 ns/op  Fabric=     16.62 ns/op  Fabric/vector=   6.84x
+  H parent replace            vector=     17.79 ns/op  Fabric=    120.18 ns/op  Fabric/vector=   6.76x
+  V parent replace            vector=     17.59 ns/op  Fabric=    102.71 ns/op  Fabric/vector=   5.84x
+    integrity=PASS
+
+  CASE 3/4  N=10000  K=4
+    edges/axis=39990  payload/node=1024 B
+    storage vector/Fabric=11360000/14080384 B  Fabric/vector=1.24x
+  construction                vector=3821100.00 ns/op  Fabric=11443650.00 ns/op  Fabric/vector=   2.99x
+  H parent scan               vector=      0.63 ns/op  Fabric=     13.85 ns/op  Fabric/vector=  22.12x
+  V parent scan               vector=      0.64 ns/op  Fabric=     13.89 ns/op  Fabric/vector=  21.85x
+  H reverse-child scan        vector=      1.96 ns/op  Fabric=     14.58 ns/op  Fabric/vector=   7.44x
+  V reverse-child scan        vector=      1.94 ns/op  Fabric=     14.02 ns/op  Fabric/vector=   7.21x
+  payload direct read         vector=      0.88 ns/op  Fabric=      0.76 ns/op  Fabric/vector=   0.87x
+  payload atomic_ref read     vector=      0.83 ns/op  Fabric=      0.88 ns/op  Fabric/vector=   1.06x
+  H child + payload           vector=      2.66 ns/op  Fabric=     15.87 ns/op  Fabric/vector=   5.97x
+  H parent replace            vector=     13.98 ns/op  Fabric=    106.51 ns/op  Fabric/vector=   7.62x
+  V parent replace            vector=     13.66 ns/op  Fabric=     90.36 ns/op  Fabric/vector=   6.61x
+    integrity=PASS
+
+  CASE 4/4  N=10000  K=32
+    edges/axis=319472  payload/node=1024 B
+    storage vector/Fabric=18080000/23040384 B  Fabric/vector=1.27x
+  construction                vector=18988600.00 ns/op  Fabric=58104350.00 ns/op  Fabric/vector=   3.06x
+  H parent scan               vector=      0.91 ns/op  Fabric=     14.21 ns/op  Fabric/vector=  15.57x
+  V parent scan               vector=      0.93 ns/op  Fabric=     14.51 ns/op  Fabric/vector=  15.60x
+  H reverse-child scan        vector=      2.38 ns/op  Fabric=     16.13 ns/op  Fabric/vector=   6.79x
+  V reverse-child scan        vector=      2.53 ns/op  Fabric=     15.53 ns/op  Fabric/vector=   6.15x
+  payload direct read         vector=      0.90 ns/op  Fabric=      0.86 ns/op  Fabric/vector=   0.95x
+  payload atomic_ref read     vector=      0.84 ns/op  Fabric=      0.88 ns/op  Fabric/vector=   1.05x
+  H child + payload           vector=      2.65 ns/op  Fabric=     16.56 ns/op  Fabric/vector=   6.24x
+  H parent replace            vector=     17.79 ns/op  Fabric=    118.42 ns/op  Fabric/vector=   6.65x
+  V parent replace            vector=     18.01 ns/op  Fabric=    102.36 ns/op  Fabric/vector=   5.68x
+    integrity=PASS
+
+TEST 1 OVERALL: PASS
+
+================================================================================
+TEST 2A - HOTSPOT STRUCTURAL MUTATION
+================================================================================
+Each writer owns one child; all writers contend on the same two H and two V
+parents. The baseline locks only participating rows. Every writer count from
+1 through usable_threads-2 is printed for each of the four (N,K) cases.
+
+  CASE 1/4  N=100  K=4  parent-pool=4
+    threads= 1  rowlock=    39.69 ns/op (  25.20 M/s)  Fabric=    78.36 ns/op (  12.76 M/s)  Fabric/row=  1.97x  retry/success=  0.0000  PASS
+    threads= 2  rowlock=    72.12 ns/op (  13.87 M/s)  Fabric=    79.29 ns/op (  12.61 M/s)  Fabric/row=  1.10x  retry/success=  0.0843  PASS
+    threads= 3  rowlock=   114.58 ns/op (   8.73 M/s)  Fabric=   108.18 ns/op (   9.24 M/s)  Fabric/row=  0.94x  retry/success=  1.7823  PASS
+    threads= 4  rowlock=   132.57 ns/op (   7.54 M/s)  Fabric=   120.31 ns/op (   8.31 M/s)  Fabric/row=  0.91x  retry/success=  3.7973  PASS
+    threads= 5  rowlock=   159.29 ns/op (   6.28 M/s)  Fabric=   129.70 ns/op (   7.71 M/s)  Fabric/row=  0.81x  retry/success=  5.0463  PASS
+    threads= 6  rowlock=   180.00 ns/op (   5.56 M/s)  Fabric=   142.56 ns/op (   7.01 M/s)  Fabric/row=  0.79x  retry/success=  6.8938  PASS
+    threads= 7  rowlock=   196.51 ns/op (   5.09 M/s)  Fabric=   137.51 ns/op (   7.27 M/s)  Fabric/row=  0.70x  retry/success=  8.0928  PASS
+    threads= 8  rowlock=   217.08 ns/op (   4.61 M/s)  Fabric=   146.70 ns/op (   6.82 M/s)  Fabric/row=  0.68x  retry/success=  9.7655  PASS
+    threads= 9  rowlock=   253.16 ns/op (   3.95 M/s)  Fabric=   147.36 ns/op (   6.79 M/s)  Fabric/row=  0.58x  retry/success= 11.0587  PASS
+    threads=10  rowlock=   270.25 ns/op (   3.70 M/s)  Fabric=   161.64 ns/op (   6.19 M/s)  Fabric/row=  0.60x  retry/success= 11.9350  PASS
+    threads=11  rowlock=   292.76 ns/op (   3.42 M/s)  Fabric=   168.27 ns/op (   5.94 M/s)  Fabric/row=  0.57x  retry/success= 12.8027  PASS
+    threads=12  rowlock=   319.51 ns/op (   3.13 M/s)  Fabric=   186.86 ns/op (   5.35 M/s)  Fabric/row=  0.58x  retry/success= 14.2859  PASS
+    threads=13  rowlock=   347.01 ns/op (   2.88 M/s)  Fabric=   192.79 ns/op (   5.19 M/s)  Fabric/row=  0.56x  retry/success= 15.7646  PASS
+    threads=14  rowlock=   363.65 ns/op (   2.75 M/s)  Fabric=   196.38 ns/op (   5.09 M/s)  Fabric/row=  0.54x  retry/success= 16.5324  PASS
+    threads=15  rowlock=   425.74 ns/op (   2.35 M/s)  Fabric=   204.49 ns/op (   4.89 M/s)  Fabric/row=  0.48x  retry/success= 17.2900  PASS
+    threads=16  rowlock=   524.91 ns/op (   1.91 M/s)  Fabric=   215.48 ns/op (   4.64 M/s)  Fabric/row=  0.41x  retry/success= 18.2797  PASS
+
+  CASE 2/4  N=100  K=32  parent-pool=4
+    threads= 1  rowlock=    46.47 ns/op (  21.52 M/s)  Fabric=    79.21 ns/op (  12.62 M/s)  Fabric/row=  1.70x  retry/success=  0.0000  PASS
+    threads= 2  rowlock=    92.14 ns/op (  10.85 M/s)  Fabric=    88.83 ns/op (  11.26 M/s)  Fabric/row=  0.96x  retry/success=  0.0907  PASS
+    threads= 3  rowlock=    99.95 ns/op (  10.01 M/s)  Fabric=   118.85 ns/op (   8.41 M/s)  Fabric/row=  1.19x  retry/success=  1.8891  PASS
+    threads= 4  rowlock=   129.91 ns/op (   7.70 M/s)  Fabric=   124.83 ns/op (   8.01 M/s)  Fabric/row=  0.96x  retry/success=  3.7220  PASS
+    threads= 5  rowlock=   157.93 ns/op (   6.33 M/s)  Fabric=   135.69 ns/op (   7.37 M/s)  Fabric/row=  0.86x  retry/success=  5.3787  PASS
+    threads= 6  rowlock=   180.96 ns/op (   5.53 M/s)  Fabric=   141.87 ns/op (   7.05 M/s)  Fabric/row=  0.78x  retry/success=  7.6227  PASS
+    threads= 7  rowlock=   199.70 ns/op (   5.01 M/s)  Fabric=   153.51 ns/op (   6.51 M/s)  Fabric/row=  0.77x  retry/success=  9.1178  PASS
+    threads= 8  rowlock=   223.68 ns/op (   4.47 M/s)  Fabric=   148.97 ns/op (   6.71 M/s)  Fabric/row=  0.67x  retry/success= 10.5378  PASS
+    threads= 9  rowlock=   233.79 ns/op (   4.28 M/s)  Fabric=   167.32 ns/op (   5.98 M/s)  Fabric/row=  0.72x  retry/success= 11.6824  PASS
+    threads=10  rowlock=   248.51 ns/op (   4.02 M/s)  Fabric=   168.75 ns/op (   5.93 M/s)  Fabric/row=  0.68x  retry/success= 12.6629  PASS
+    threads=11  rowlock=   267.83 ns/op (   3.73 M/s)  Fabric=   181.48 ns/op (   5.51 M/s)  Fabric/row=  0.68x  retry/success= 13.9324  PASS
+    threads=12  rowlock=   288.05 ns/op (   3.47 M/s)  Fabric=   190.75 ns/op (   5.24 M/s)  Fabric/row=  0.66x  retry/success= 14.9618  PASS
+    threads=13  rowlock=   319.32 ns/op (   3.13 M/s)  Fabric=   200.84 ns/op (   4.98 M/s)  Fabric/row=  0.63x  retry/success= 15.9416  PASS
+    threads=14  rowlock=   409.51 ns/op (   2.44 M/s)  Fabric=   204.34 ns/op (   4.89 M/s)  Fabric/row=  0.50x  retry/success= 16.3924  PASS
+    threads=15  rowlock=   464.00 ns/op (   2.16 M/s)  Fabric=   209.16 ns/op (   4.78 M/s)  Fabric/row=  0.45x  retry/success= 17.8471  PASS
+    threads=16  rowlock=   606.06 ns/op (   1.65 M/s)  Fabric=   216.33 ns/op (   4.62 M/s)  Fabric/row=  0.36x  retry/success= 18.8214  PASS
+
+  CASE 3/4  N=10000  K=4  parent-pool=4
+    threads= 1  rowlock=    38.58 ns/op (  25.92 M/s)  Fabric=    79.06 ns/op (  12.65 M/s)  Fabric/row=  2.05x  retry/success=  0.0000  PASS
+    threads= 2  rowlock=    97.78 ns/op (  10.23 M/s)  Fabric=    88.04 ns/op (  11.36 M/s)  Fabric/row=  0.90x  retry/success=  0.1276  PASS
+    threads= 3  rowlock=   121.56 ns/op (   8.23 M/s)  Fabric=   114.86 ns/op (   8.71 M/s)  Fabric/row=  0.94x  retry/success=  2.0941  PASS
+    threads= 4  rowlock=   127.83 ns/op (   7.82 M/s)  Fabric=   120.81 ns/op (   8.28 M/s)  Fabric/row=  0.95x  retry/success=  3.7440  PASS
+    threads= 5  rowlock=   143.59 ns/op (   6.96 M/s)  Fabric=   127.32 ns/op (   7.85 M/s)  Fabric/row=  0.89x  retry/success=  5.2616  PASS
+    threads= 6  rowlock=   174.94 ns/op (   5.72 M/s)  Fabric=   138.09 ns/op (   7.24 M/s)  Fabric/row=  0.79x  retry/success=  6.9620  PASS
+    threads= 7  rowlock=   206.73 ns/op (   4.84 M/s)  Fabric=   141.65 ns/op (   7.06 M/s)  Fabric/row=  0.69x  retry/success=  8.4424  PASS
+    threads= 8  rowlock=   214.40 ns/op (   4.66 M/s)  Fabric=   142.57 ns/op (   7.01 M/s)  Fabric/row=  0.66x  retry/success= 10.0613  PASS
+    threads= 9  rowlock=   241.41 ns/op (   4.14 M/s)  Fabric=   157.07 ns/op (   6.37 M/s)  Fabric/row=  0.65x  retry/success= 10.8768  PASS
+    threads=10  rowlock=   257.56 ns/op (   3.88 M/s)  Fabric=   158.68 ns/op (   6.30 M/s)  Fabric/row=  0.62x  retry/success= 11.8550  PASS
+    threads=11  rowlock=   273.48 ns/op (   3.66 M/s)  Fabric=   175.39 ns/op (   5.70 M/s)  Fabric/row=  0.64x  retry/success= 12.8690  PASS
+    threads=12  rowlock=   276.17 ns/op (   3.62 M/s)  Fabric=   174.15 ns/op (   5.74 M/s)  Fabric/row=  0.63x  retry/success= 14.3737  PASS
+    threads=13  rowlock=   302.62 ns/op (   3.30 M/s)  Fabric=   188.84 ns/op (   5.30 M/s)  Fabric/row=  0.62x  retry/success= 15.2365  PASS
+    threads=14  rowlock=   347.02 ns/op (   2.88 M/s)  Fabric=   191.08 ns/op (   5.23 M/s)  Fabric/row=  0.55x  retry/success= 16.8121  PASS
+    threads=15  rowlock=   420.53 ns/op (   2.38 M/s)  Fabric=   201.40 ns/op (   4.97 M/s)  Fabric/row=  0.48x  retry/success= 16.6668  PASS
+    threads=16  rowlock=   536.98 ns/op (   1.86 M/s)  Fabric=   212.13 ns/op (   4.71 M/s)  Fabric/row=  0.40x  retry/success= 17.6735  PASS
+
+  CASE 4/4  N=10000  K=32  parent-pool=4
+    threads= 1  rowlock=    42.79 ns/op (  23.37 M/s)  Fabric=    83.12 ns/op (  12.03 M/s)  Fabric/row=  1.94x  retry/success=  0.0000  PASS
+    threads= 2  rowlock=    80.71 ns/op (  12.39 M/s)  Fabric=    92.14 ns/op (  10.85 M/s)  Fabric/row=  1.14x  retry/success=  0.1852  PASS
+    threads= 3  rowlock=   108.60 ns/op (   9.21 M/s)  Fabric=   115.18 ns/op (   8.68 M/s)  Fabric/row=  1.06x  retry/success=  1.9468  PASS
+    threads= 4  rowlock=   123.70 ns/op (   8.08 M/s)  Fabric=   129.23 ns/op (   7.74 M/s)  Fabric/row=  1.04x  retry/success=  3.6608  PASS
+    threads= 5  rowlock=   169.25 ns/op (   5.91 M/s)  Fabric=   140.13 ns/op (   7.14 M/s)  Fabric/row=  0.83x  retry/success=  5.3068  PASS
+    threads= 6  rowlock=   194.15 ns/op (   5.15 M/s)  Fabric=   139.29 ns/op (   7.18 M/s)  Fabric/row=  0.72x  retry/success=  7.3144  PASS
+    threads= 7  rowlock=   238.31 ns/op (   4.20 M/s)  Fabric=   146.92 ns/op (   6.81 M/s)  Fabric/row=  0.62x  retry/success=  7.4599  PASS
+    threads= 8  rowlock=   250.12 ns/op (   4.00 M/s)  Fabric=   160.07 ns/op (   6.25 M/s)  Fabric/row=  0.64x  retry/success=  9.4531  PASS
+    threads= 9  rowlock=   272.98 ns/op (   3.66 M/s)  Fabric=   181.66 ns/op (   5.50 M/s)  Fabric/row=  0.67x  retry/success=  8.1453  PASS
+    threads=10  rowlock=   286.53 ns/op (   3.49 M/s)  Fabric=   161.53 ns/op (   6.19 M/s)  Fabric/row=  0.56x  retry/success= 12.5941  PASS
+    threads=11  rowlock=   297.90 ns/op (   3.36 M/s)  Fabric=   174.23 ns/op (   5.74 M/s)  Fabric/row=  0.58x  retry/success= 13.8340  PASS
+    threads=12  rowlock=   340.17 ns/op (   2.94 M/s)  Fabric=   191.81 ns/op (   5.21 M/s)  Fabric/row=  0.56x  retry/success= 14.1101  PASS
+    threads=13  rowlock=   400.77 ns/op (   2.50 M/s)  Fabric=   199.47 ns/op (   5.01 M/s)  Fabric/row=  0.50x  retry/success= 15.7751  PASS
+    threads=14  rowlock=   438.30 ns/op (   2.28 M/s)  Fabric=   210.82 ns/op (   4.74 M/s)  Fabric/row=  0.48x  retry/success= 17.2545  PASS
+    threads=15  rowlock=   527.68 ns/op (   1.90 M/s)  Fabric=   211.16 ns/op (   4.74 M/s)  Fabric/row=  0.40x  retry/success= 17.9427  PASS
+    threads=16  rowlock=   607.93 ns/op (   1.64 M/s)  Fabric=   211.94 ns/op (   4.72 M/s)  Fabric/row=  0.35x  retry/success= 19.0383  PASS
+
+TEST 2A OVERALL: PASS
+
+================================================================================
+TEST 2B - DISTRIBUTED STRUCTURAL MUTATION
+================================================================================
+Each writer owns one child and follows the same deterministic random schedule
+for both backends. The parent pool is min(100, legal predecessor nodes).
+Test 2B now uses the same 1..(usable_threads-2) sweep as Test 2A.
+
+  CASE 1/4  N=100  K=4  parent-pool=84
+    threads= 1  rowlock=    39.28 ns/op (  25.46 M/s)  Fabric=    73.49 ns/op (  13.61 M/s)  Fabric/row=  1.87x  retry/success=  0.0000  PASS
+    threads= 2  rowlock=    51.01 ns/op (  19.60 M/s)  Fabric=    48.35 ns/op (  20.68 M/s)  Fabric/row=  0.95x  retry/success=  0.0209  PASS
+    threads= 3  rowlock=    48.48 ns/op (  20.63 M/s)  Fabric=    36.70 ns/op (  27.25 M/s)  Fabric/row=  0.76x  retry/success=  0.0521  PASS
+    threads= 4  rowlock=    52.86 ns/op (  18.92 M/s)  Fabric=    28.57 ns/op (  35.00 M/s)  Fabric/row=  0.54x  retry/success=  0.0721  PASS
+    threads= 5  rowlock=    46.36 ns/op (  21.57 M/s)  Fabric=    23.95 ns/op (  41.74 M/s)  Fabric/row=  0.52x  retry/success=  0.1058  PASS
+    threads= 6  rowlock=    41.35 ns/op (  24.19 M/s)  Fabric=    21.48 ns/op (  46.55 M/s)  Fabric/row=  0.52x  retry/success=  0.1338  PASS
+    threads= 7  rowlock=    40.26 ns/op (  24.84 M/s)  Fabric=    19.04 ns/op (  52.53 M/s)  Fabric/row=  0.47x  retry/success=  0.1550  PASS
+    threads= 8  rowlock=    39.89 ns/op (  25.07 M/s)  Fabric=    25.98 ns/op (  38.49 M/s)  Fabric/row=  0.65x  retry/success=  0.1735  PASS
+    threads= 9  rowlock=    37.37 ns/op (  26.76 M/s)  Fabric=    24.86 ns/op (  40.23 M/s)  Fabric/row=  0.67x  retry/success=  0.2089  PASS
+    threads=10  rowlock=    34.61 ns/op (  28.89 M/s)  Fabric=    17.23 ns/op (  58.03 M/s)  Fabric/row=  0.50x  retry/success=  0.2432  PASS
+    threads=11  rowlock=    32.70 ns/op (  30.58 M/s)  Fabric=    16.89 ns/op (  59.22 M/s)  Fabric/row=  0.52x  retry/success=  0.2759  PASS
+    threads=12  rowlock=    32.28 ns/op (  30.98 M/s)  Fabric=    16.50 ns/op (  60.62 M/s)  Fabric/row=  0.51x  retry/success=  0.3069  PASS
+    threads=13  rowlock=    31.35 ns/op (  31.90 M/s)  Fabric=    15.14 ns/op (  66.07 M/s)  Fabric/row=  0.48x  retry/success=  0.3309  PASS
+    threads=14  rowlock=    30.77 ns/op (  32.50 M/s)  Fabric=    16.10 ns/op (  62.10 M/s)  Fabric/row=  0.52x  retry/success=  0.3447  PASS
+    threads=15  rowlock=    29.84 ns/op (  33.52 M/s)  Fabric=    15.45 ns/op (  64.74 M/s)  Fabric/row=  0.52x  retry/success=  0.3984  PASS
+    threads=16  rowlock=    29.43 ns/op (  33.98 M/s)  Fabric=    14.57 ns/op (  68.65 M/s)  Fabric/row=  0.49x  retry/success=  0.4195  PASS
+
+  CASE 2/4  N=100  K=32  parent-pool=84
+    threads= 1  rowlock=    42.62 ns/op (  23.46 M/s)  Fabric=    79.61 ns/op (  12.56 M/s)  Fabric/row=  1.87x  retry/success=  0.0000  PASS
+    threads= 2  rowlock=    71.34 ns/op (  14.02 M/s)  Fabric=    59.31 ns/op (  16.86 M/s)  Fabric/row=  0.83x  retry/success=  0.0174  PASS
+    threads= 3  rowlock=    57.11 ns/op (  17.51 M/s)  Fabric=    45.93 ns/op (  21.77 M/s)  Fabric/row=  0.80x  retry/success=  0.0498  PASS
+    threads= 4  rowlock=    51.25 ns/op (  19.51 M/s)  Fabric=    35.84 ns/op (  27.90 M/s)  Fabric/row=  0.70x  retry/success=  0.0771  PASS
+    threads= 5  rowlock=    50.02 ns/op (  19.99 M/s)  Fabric=    33.28 ns/op (  30.05 M/s)  Fabric/row=  0.67x  retry/success=  0.1175  PASS
+    threads= 6  rowlock=    44.21 ns/op (  22.62 M/s)  Fabric=    27.34 ns/op (  36.58 M/s)  Fabric/row=  0.62x  retry/success=  0.1451  PASS
+    threads= 7  rowlock=    42.41 ns/op (  23.58 M/s)  Fabric=    26.30 ns/op (  38.02 M/s)  Fabric/row=  0.62x  retry/success=  0.1833  PASS
+    threads= 8  rowlock=    39.08 ns/op (  25.59 M/s)  Fabric=    24.46 ns/op (  40.88 M/s)  Fabric/row=  0.63x  retry/success=  0.2283  PASS
+    threads= 9  rowlock=    36.37 ns/op (  27.49 M/s)  Fabric=    22.31 ns/op (  44.82 M/s)  Fabric/row=  0.61x  retry/success=  0.2548  PASS
+    threads=10  rowlock=    34.62 ns/op (  28.89 M/s)  Fabric=    20.58 ns/op (  48.59 M/s)  Fabric/row=  0.59x  retry/success=  0.3106  PASS
+    threads=11  rowlock=    33.22 ns/op (  30.11 M/s)  Fabric=    19.55 ns/op (  51.16 M/s)  Fabric/row=  0.59x  retry/success=  0.3190  PASS
+    threads=12  rowlock=    31.70 ns/op (  31.55 M/s)  Fabric=    18.22 ns/op (  54.89 M/s)  Fabric/row=  0.57x  retry/success=  0.3472  PASS
+    threads=13  rowlock=    36.24 ns/op (  27.60 M/s)  Fabric=    23.00 ns/op (  43.47 M/s)  Fabric/row=  0.63x  retry/success=  0.2457  PASS
+    threads=14  rowlock=    31.61 ns/op (  31.64 M/s)  Fabric=    18.76 ns/op (  53.30 M/s)  Fabric/row=  0.59x  retry/success=  0.3429  PASS
+    threads=15  rowlock=    28.91 ns/op (  34.59 M/s)  Fabric=    15.89 ns/op (  62.92 M/s)  Fabric/row=  0.55x  retry/success=  0.4584  PASS
+    threads=16  rowlock=    28.58 ns/op (  34.99 M/s)  Fabric=    15.42 ns/op (  64.84 M/s)  Fabric/row=  0.54x  retry/success=  0.4984  PASS
+
+  CASE 3/4  N=10000  K=4  parent-pool=100
+    threads= 1  rowlock=    44.58 ns/op (  22.43 M/s)  Fabric=    76.19 ns/op (  13.13 M/s)  Fabric/row=  1.71x  retry/success=  0.0000  PASS
+    threads= 2  rowlock=    56.83 ns/op (  17.60 M/s)  Fabric=    50.53 ns/op (  19.79 M/s)  Fabric/row=  0.89x  retry/success=  0.0210  PASS
+    threads= 3  rowlock=    58.50 ns/op (  17.09 M/s)  Fabric=    36.95 ns/op (  27.06 M/s)  Fabric/row=  0.63x  retry/success=  0.0433  PASS
+    threads= 4  rowlock=    48.15 ns/op (  20.77 M/s)  Fabric=    33.39 ns/op (  29.95 M/s)  Fabric/row=  0.69x  retry/success=  0.0600  PASS
+    threads= 5  rowlock=    44.84 ns/op (  22.30 M/s)  Fabric=    26.12 ns/op (  38.29 M/s)  Fabric/row=  0.58x  retry/success=  0.0851  PASS
+    threads= 6  rowlock=    42.55 ns/op (  23.50 M/s)  Fabric=    21.29 ns/op (  46.97 M/s)  Fabric/row=  0.50x  retry/success=  0.1156  PASS
+    threads= 7  rowlock=    36.94 ns/op (  27.07 M/s)  Fabric=    20.65 ns/op (  48.42 M/s)  Fabric/row=  0.56x  retry/success=  0.1284  PASS
+    threads= 8  rowlock=    35.39 ns/op (  28.26 M/s)  Fabric=    20.53 ns/op (  48.70 M/s)  Fabric/row=  0.58x  retry/success=  0.1497  PASS
+    threads= 9  rowlock=    32.93 ns/op (  30.37 M/s)  Fabric=    19.44 ns/op (  51.43 M/s)  Fabric/row=  0.59x  retry/success=  0.2056  PASS
+    threads=10  rowlock=    32.10 ns/op (  31.15 M/s)  Fabric=    19.00 ns/op (  52.63 M/s)  Fabric/row=  0.59x  retry/success=  0.2306  PASS
+    threads=11  rowlock=    31.85 ns/op (  31.40 M/s)  Fabric=    18.35 ns/op (  54.49 M/s)  Fabric/row=  0.58x  retry/success=  0.2055  PASS
+    threads=12  rowlock=    35.39 ns/op (  28.25 M/s)  Fabric=    21.67 ns/op (  46.14 M/s)  Fabric/row=  0.61x  retry/success=  0.2548  PASS
+    threads=13  rowlock=    33.95 ns/op (  29.45 M/s)  Fabric=    20.32 ns/op (  49.22 M/s)  Fabric/row=  0.60x  retry/success=  0.4396  PASS
+    threads=14  rowlock=    30.90 ns/op (  32.37 M/s)  Fabric=    16.48 ns/op (  60.69 M/s)  Fabric/row=  0.53x  retry/success=  0.3035  PASS
+    threads=15  rowlock=    30.88 ns/op (  32.38 M/s)  Fabric=    17.68 ns/op (  56.57 M/s)  Fabric/row=  0.57x  retry/success=  0.7919  PASS
+    threads=16  rowlock=    31.23 ns/op (  32.02 M/s)  Fabric=    15.43 ns/op (  64.82 M/s)  Fabric/row=  0.49x  retry/success=  0.4777  PASS
+
+  CASE 4/4  N=10000  K=32  parent-pool=100
+    threads= 1  rowlock=    44.01 ns/op (  22.72 M/s)  Fabric=    81.76 ns/op (  12.23 M/s)  Fabric/row=  1.86x  retry/success=  0.0000  PASS
+    threads= 2  rowlock=    64.98 ns/op (  15.39 M/s)  Fabric=    63.53 ns/op (  15.74 M/s)  Fabric/row=  0.98x  retry/success=  0.0164  PASS
+    threads= 3  rowlock=    58.67 ns/op (  17.04 M/s)  Fabric=    46.86 ns/op (  21.34 M/s)  Fabric/row=  0.80x  retry/success=  0.0465  PASS
+    threads= 4  rowlock=    53.06 ns/op (  18.85 M/s)  Fabric=    35.72 ns/op (  28.00 M/s)  Fabric/row=  0.67x  retry/success=  0.0633  PASS
+    threads= 5  rowlock=    47.20 ns/op (  21.18 M/s)  Fabric=    30.38 ns/op (  32.92 M/s)  Fabric/row=  0.64x  retry/success=  0.0878  PASS
+    threads= 6  rowlock=    42.10 ns/op (  23.75 M/s)  Fabric=    28.40 ns/op (  35.21 M/s)  Fabric/row=  0.67x  retry/success=  0.1499  PASS
+    threads= 7  rowlock=    45.18 ns/op (  22.13 M/s)  Fabric=    29.72 ns/op (  33.65 M/s)  Fabric/row=  0.66x  retry/success=  0.1446  PASS
+    threads= 8  rowlock=    42.19 ns/op (  23.70 M/s)  Fabric=    32.90 ns/op (  30.39 M/s)  Fabric/row=  0.78x  retry/success=  0.1989  PASS
+    threads= 9  rowlock=    42.85 ns/op (  23.34 M/s)  Fabric=    28.30 ns/op (  35.33 M/s)  Fabric/row=  0.66x  retry/success=  0.1712  PASS
+    threads=10  rowlock=    41.06 ns/op (  24.36 M/s)  Fabric=    35.18 ns/op (  28.43 M/s)  Fabric/row=  0.86x  retry/success=  0.3860  PASS
+    threads=11  rowlock=    44.59 ns/op (  22.42 M/s)  Fabric=    27.81 ns/op (  35.95 M/s)  Fabric/row=  0.62x  retry/success=  0.2950  PASS
+    threads=12  rowlock=    33.82 ns/op (  29.57 M/s)  Fabric=    21.45 ns/op (  46.61 M/s)  Fabric/row=  0.63x  retry/success=  0.2925  PASS
+    threads=13  rowlock=    30.81 ns/op (  32.45 M/s)  Fabric=    19.16 ns/op (  52.19 M/s)  Fabric/row=  0.62x  retry/success=  0.4018  PASS
+    threads=14  rowlock=    32.71 ns/op (  30.57 M/s)  Fabric=    20.51 ns/op (  48.76 M/s)  Fabric/row=  0.63x  retry/success=  0.3247  PASS
+    threads=15  rowlock=    34.95 ns/op (  28.61 M/s)  Fabric=    20.44 ns/op (  48.93 M/s)  Fabric/row=  0.58x  retry/success=  0.3551  PASS
+    threads=16  rowlock=    44.28 ns/op (  22.58 M/s)  Fabric=    27.44 ns/op (  36.45 M/s)  Fabric/row=  0.62x  retry/success=  0.5908  PASS
+
+TEST 2B OVERALL: PASS
+
+TEST 2 OVERALL: PASS
+
+================================================================================
+TEST 3A - HOTSPOT STABLE READS WITH TWO ACTIVE WRITERS
+================================================================================
+Exactly two writers remain active: H toggles 0<->1 and V toggles 2<->3
+on the same child. Readers sweep 1..(usable_threads-2). The vector baseline
+uses row-local shared_mutex shared reads and exclusive writer ownership.
+
+  CASE 1/4  N=100  K=4  parent-pool=4
+    readers= 1  row-rw=    24.53 ns (  40.77 M/s)  Fabric=    47.17 ns (  21.20 M/s)  Fabric/row=  1.92x  retry/read=  0.2076  starve row/Fabric=0/0  writers M/s row/Fabric=19.35/14.12  correctness=PASS  progress=PASS  PASS
+    readers= 2  row-rw=    20.94 ns (  47.76 M/s)  Fabric=    29.40 ns (  34.01 M/s)  Fabric/row=  1.40x  retry/read=  0.2456  starve row/Fabric=0/0  writers M/s row/Fabric=18.48/12.76  correctness=PASS  progress=PASS  PASS
+    readers= 3  row-rw=    28.15 ns (  35.53 M/s)  Fabric=    19.26 ns (  51.93 M/s)  Fabric/row=  0.68x  retry/read=  0.2285  starve row/Fabric=0/0  writers M/s row/Fabric=18.49/11.36  correctness=PASS  progress=PASS  PASS
+    readers= 4  row-rw=    35.64 ns (  28.06 M/s)  Fabric=    15.05 ns (  66.43 M/s)  Fabric/row=  0.42x  retry/read=  0.1506  starve row/Fabric=0/0  writers M/s row/Fabric=16.70/11.17  correctness=PASS  progress=PASS  PASS
+    readers= 5  row-rw=    43.71 ns (  22.88 M/s)  Fabric=    14.37 ns (  69.60 M/s)  Fabric/row=  0.33x  retry/read=  0.1908  starve row/Fabric=0/0  writers M/s row/Fabric=16.52/10.56  correctness=PASS  progress=PASS  PASS
+    readers= 6  row-rw=    42.98 ns (  23.27 M/s)  Fabric=    10.36 ns (  96.48 M/s)  Fabric/row=  0.24x  retry/read=  0.1585  starve row/Fabric=0/0  writers M/s row/Fabric=16.01/9.62  correctness=PASS  progress=PASS  PASS
+    readers= 7  row-rw=    41.46 ns (  24.12 M/s)  Fabric=    10.31 ns (  96.99 M/s)  Fabric/row=  0.25x  retry/read=  0.1592  starve row/Fabric=0/0  writers M/s row/Fabric=12.66/10.23  correctness=PASS  progress=PASS  PASS
+    readers= 8  row-rw=    47.20 ns (  21.19 M/s)  Fabric=     9.27 ns ( 107.87 M/s)  Fabric/row=  0.20x  retry/read=  0.2129  starve row/Fabric=0/0  writers M/s row/Fabric=11.44/9.94  correctness=PASS  progress=PASS  PASS
+    readers= 9  row-rw=    47.96 ns (  20.85 M/s)  Fabric=     7.73 ns ( 129.41 M/s)  Fabric/row=  0.16x  retry/read=  0.1667  starve row/Fabric=0/0  writers M/s row/Fabric=10.05/10.26  correctness=PASS  progress=PASS  PASS
+    readers=10  row-rw=    43.20 ns (  23.15 M/s)  Fabric=     7.35 ns ( 135.98 M/s)  Fabric/row=  0.17x  retry/read=  0.1990  starve row/Fabric=0/0  writers M/s row/Fabric=7.31/8.28  correctness=PASS  progress=PASS  PASS
+    readers=11  row-rw=    53.79 ns (  18.59 M/s)  Fabric=     6.55 ns ( 152.61 M/s)  Fabric/row=  0.12x  retry/read=  0.1839  starve row/Fabric=0/0  writers M/s row/Fabric=11.08/8.28  correctness=PASS  progress=PASS  PASS
+    readers=12  row-rw=    47.83 ns (  20.91 M/s)  Fabric=     6.19 ns ( 161.57 M/s)  Fabric/row=  0.13x  retry/read=  0.1855  starve row/Fabric=0/0  writers M/s row/Fabric=6.75/8.64  correctness=PASS  progress=PASS  PASS
+    readers=13  row-rw=    54.87 ns (  18.23 M/s)  Fabric=     5.93 ns ( 168.52 M/s)  Fabric/row=  0.11x  retry/read=  0.1922  starve row/Fabric=0/0  writers M/s row/Fabric=8.41/8.14  correctness=PASS  progress=PASS  PASS
+    readers=14  row-rw=    52.31 ns (  19.12 M/s)  Fabric=     4.97 ns ( 201.35 M/s)  Fabric/row=  0.09x  retry/read=  0.1592  starve row/Fabric=0/0  writers M/s row/Fabric=1.39/8.90  correctness=PASS  progress=PASS  PASS
+    readers=15  row-rw=    61.80 ns (  16.18 M/s)  Fabric=     5.07 ns ( 197.30 M/s)  Fabric/row=  0.08x  retry/read=  0.2002  starve row/Fabric=0/0  writers M/s row/Fabric=1.50/8.06  correctness=PASS  progress=PASS  PASS
+    readers=16  row-rw=    55.11 ns (  18.15 M/s)  Fabric=     4.64 ns ( 215.52 M/s)  Fabric/row=  0.08x  retry/read=  0.1640  starve row/Fabric=0/0  writers M/s row/Fabric=0.89/8.92  correctness=PASS  progress=PASS  PASS
+
+  CASE 2/4  N=100  K=32  parent-pool=4
+    readers= 1  row-rw=   207.84 ns (   4.81 M/s)  Fabric=    73.03 ns (  13.69 M/s)  Fabric/row=  0.35x  retry/read=  0.4789  starve row/Fabric=0/0  writers M/s row/Fabric=6.99/13.78  correctness=PASS  progress=PASS  PASS
+    readers= 2  row-rw=    88.47 ns (  11.30 M/s)  Fabric=    44.97 ns (  22.24 M/s)  Fabric/row=  0.51x  retry/read=  0.6627  starve row/Fabric=0/0  writers M/s row/Fabric=7.26/11.86  correctness=PASS  progress=PASS  PASS
+    readers= 3  row-rw=   104.23 ns (   9.59 M/s)  Fabric=    24.31 ns (  41.14 M/s)  Fabric/row=  0.23x  retry/read=  0.3348  starve row/Fabric=0/0  writers M/s row/Fabric=6.36/10.25  correctness=PASS  progress=PASS  PASS
+    readers= 4  row-rw=    71.42 ns (  14.00 M/s)  Fabric=    19.81 ns (  50.48 M/s)  Fabric/row=  0.28x  retry/read=  0.3362  starve row/Fabric=0/0  writers M/s row/Fabric=7.18/9.67  correctness=PASS  progress=PASS  PASS
+    readers= 5  row-rw=    84.54 ns (  11.83 M/s)  Fabric=    15.80 ns (  63.29 M/s)  Fabric/row=  0.19x  retry/read=  0.3478  starve row/Fabric=0/0  writers M/s row/Fabric=5.36/9.08  correctness=PASS  progress=PASS  PASS
+    readers= 6  row-rw=    63.37 ns (  15.78 M/s)  Fabric=    15.11 ns (  66.16 M/s)  Fabric/row=  0.24x  retry/read=  0.3769  starve row/Fabric=0/0  writers M/s row/Fabric=5.48/8.98  correctness=PASS  progress=PASS  PASS
+    readers= 7  row-rw=    74.68 ns (  13.39 M/s)  Fabric=    11.96 ns (  83.58 M/s)  Fabric/row=  0.16x  retry/read=  0.3504  starve row/Fabric=0/0  writers M/s row/Fabric=4.42/8.62  correctness=PASS  progress=PASS  PASS
+    readers= 8  row-rw=    54.93 ns (  18.21 M/s)  Fabric=    12.32 ns (  81.18 M/s)  Fabric/row=  0.22x  retry/read=  0.3338  starve row/Fabric=0/0  writers M/s row/Fabric=4.03/9.02  correctness=PASS  progress=PASS  PASS
+    readers= 9  row-rw=    69.72 ns (  14.34 M/s)  Fabric=    10.80 ns (  92.60 M/s)  Fabric/row=  0.15x  retry/read=  0.3811  starve row/Fabric=0/0  writers M/s row/Fabric=3.66/8.83  correctness=PASS  progress=PASS  PASS
+    readers=10  row-rw=    62.58 ns (  15.98 M/s)  Fabric=    11.54 ns (  86.69 M/s)  Fabric/row=  0.18x  retry/read=  0.4349  starve row/Fabric=0/0  writers M/s row/Fabric=3.44/8.89  correctness=PASS  progress=PASS  PASS
+    readers=11  row-rw=    59.05 ns (  16.93 M/s)  Fabric=     8.55 ns ( 117.02 M/s)  Fabric/row=  0.14x  retry/read=  0.3530  starve row/Fabric=0/0  writers M/s row/Fabric=7.32/8.31  correctness=PASS  progress=PASS  PASS
+    readers=12  row-rw=    49.95 ns (  20.02 M/s)  Fabric=     8.38 ns ( 119.39 M/s)  Fabric/row=  0.17x  retry/read=  0.4502  starve row/Fabric=0/0  writers M/s row/Fabric=4.06/7.75  correctness=PASS  progress=PASS  PASS
+    readers=13  row-rw=    54.32 ns (  18.41 M/s)  Fabric=     8.54 ns ( 117.08 M/s)  Fabric/row=  0.16x  retry/read=  0.4278  starve row/Fabric=0/0  writers M/s row/Fabric=5.33/8.36  correctness=PASS  progress=PASS  PASS
+    readers=14  row-rw=    53.76 ns (  18.60 M/s)  Fabric=     8.34 ns ( 119.92 M/s)  Fabric/row=  0.16x  retry/read=  0.4485  starve row/Fabric=0/0  writers M/s row/Fabric=3.60/7.81  correctness=PASS  progress=PASS  PASS
+    readers=15  row-rw=    55.45 ns (  18.03 M/s)  Fabric=     6.63 ns ( 150.73 M/s)  Fabric/row=  0.12x  retry/read=  0.3576  starve row/Fabric=0/0  writers M/s row/Fabric=3.84/7.84  correctness=PASS  progress=PASS  PASS
+    readers=16  row-rw=    56.48 ns (  17.70 M/s)  Fabric=     6.07 ns ( 164.65 M/s)  Fabric/row=  0.11x  retry/read=  0.3910  starve row/Fabric=0/0  writers M/s row/Fabric=1.29/8.08  correctness=PASS  progress=PASS  PASS
+
+  CASE 3/4  N=10000  K=4  parent-pool=4
+    readers= 1  row-rw=    34.98 ns (  28.59 M/s)  Fabric=    51.18 ns (  19.54 M/s)  Fabric/row=  1.46x  retry/read=  0.2309  starve row/Fabric=0/0  writers M/s row/Fabric=17.74/14.28  correctness=PASS  progress=PASS  PASS
+    readers= 2  row-rw=    25.34 ns (  39.46 M/s)  Fabric=    27.46 ns (  36.42 M/s)  Fabric/row=  1.08x  retry/read=  0.2507  starve row/Fabric=0/0  writers M/s row/Fabric=17.49/12.93  correctness=PASS  progress=PASS  PASS
+    readers= 3  row-rw=    38.59 ns (  25.92 M/s)  Fabric=    19.87 ns (  50.33 M/s)  Fabric/row=  0.51x  retry/read=  0.2187  starve row/Fabric=0/0  writers M/s row/Fabric=16.73/11.40  correctness=PASS  progress=PASS  PASS
+    readers= 4  row-rw=    37.45 ns (  26.70 M/s)  Fabric=    15.14 ns (  66.04 M/s)  Fabric/row=  0.40x  retry/read=  0.1778  starve row/Fabric=0/0  writers M/s row/Fabric=16.76/10.83  correctness=PASS  progress=PASS  PASS
+    readers= 5  row-rw=    47.26 ns (  21.16 M/s)  Fabric=    12.03 ns (  83.10 M/s)  Fabric/row=  0.25x  retry/read=  0.1268  starve row/Fabric=0/0  writers M/s row/Fabric=18.33/11.36  correctness=PASS  progress=PASS  PASS
+    readers= 6  row-rw=    45.97 ns (  21.76 M/s)  Fabric=    10.73 ns (  93.23 M/s)  Fabric/row=  0.23x  retry/read=  0.1870  starve row/Fabric=0/0  writers M/s row/Fabric=14.85/9.45  correctness=PASS  progress=PASS  PASS
+    readers= 7  row-rw=    48.07 ns (  20.80 M/s)  Fabric=     9.85 ns ( 101.49 M/s)  Fabric/row=  0.20x  retry/read=  0.1708  starve row/Fabric=0/0  writers M/s row/Fabric=13.32/10.59  correctness=PASS  progress=PASS  PASS
+    readers= 8  row-rw=    47.92 ns (  20.87 M/s)  Fabric=     9.30 ns ( 107.51 M/s)  Fabric/row=  0.19x  retry/read=  0.1834  starve row/Fabric=0/0  writers M/s row/Fabric=11.48/9.32  correctness=PASS  progress=PASS  PASS
+    readers= 9  row-rw=    51.18 ns (  19.54 M/s)  Fabric=     7.77 ns ( 128.77 M/s)  Fabric/row=  0.15x  retry/read=  0.1762  starve row/Fabric=0/0  writers M/s row/Fabric=10.51/8.88  correctness=PASS  progress=PASS  PASS
+    readers=10  row-rw=    49.26 ns (  20.30 M/s)  Fabric=     7.17 ns ( 139.43 M/s)  Fabric/row=  0.15x  retry/read=  0.1587  starve row/Fabric=0/0  writers M/s row/Fabric=9.03/9.54  correctness=PASS  progress=PASS  PASS
+    readers=11  row-rw=    53.31 ns (  18.76 M/s)  Fabric=     6.69 ns ( 149.49 M/s)  Fabric/row=  0.13x  retry/read=  0.1882  starve row/Fabric=0/0  writers M/s row/Fabric=8.77/8.68  correctness=PASS  progress=PASS  PASS
+    readers=12  row-rw=    50.69 ns (  19.73 M/s)  Fabric=     6.32 ns ( 158.23 M/s)  Fabric/row=  0.12x  retry/read=  0.1263  starve row/Fabric=0/0  writers M/s row/Fabric=5.89/10.49  correctness=PASS  progress=PASS  PASS
+    readers=13  row-rw=    51.61 ns (  19.38 M/s)  Fabric=     6.85 ns ( 145.94 M/s)  Fabric/row=  0.13x  retry/read=  0.2726  starve row/Fabric=0/0  writers M/s row/Fabric=4.98/8.69  correctness=PASS  progress=PASS  PASS
+    readers=14  row-rw=    51.75 ns (  19.32 M/s)  Fabric=     5.56 ns ( 179.81 M/s)  Fabric/row=  0.11x  retry/read=  0.1938  starve row/Fabric=0/0  writers M/s row/Fabric=4.91/8.49  correctness=PASS  progress=PASS  PASS
+    readers=15  row-rw=    52.47 ns (  19.06 M/s)  Fabric=     5.44 ns ( 183.66 M/s)  Fabric/row=  0.10x  retry/read=  0.2041  starve row/Fabric=0/0  writers M/s row/Fabric=4.63/8.59  correctness=PASS  progress=PASS  PASS
+    readers=16  row-rw=    52.63 ns (  19.00 M/s)  Fabric=     4.75 ns ( 210.50 M/s)  Fabric/row=  0.09x  retry/read=  0.1679  starve row/Fabric=0/0  writers M/s row/Fabric=5.26/8.54  correctness=PASS  progress=PASS  PASS
+
+  CASE 4/4  N=10000  K=32  parent-pool=4
+    readers= 1  row-rw=    44.43 ns (  22.51 M/s)  Fabric=    71.18 ns (  14.05 M/s)  Fabric/row=  1.60x  retry/read=  0.5135  starve row/Fabric=0/0  writers M/s row/Fabric=15.76/14.18  correctness=PASS  progress=PASS  PASS
+    readers= 2  row-rw=   134.67 ns (   7.43 M/s)  Fabric=    37.53 ns (  26.64 M/s)  Fabric/row=  0.28x  retry/read=  0.3869  starve row/Fabric=0/0  writers M/s row/Fabric=21.03/11.05  correctness=PASS  progress=PASS  PASS
+    readers= 3  row-rw=    35.87 ns (  27.88 M/s)  Fabric=    25.31 ns (  39.52 M/s)  Fabric/row=  0.71x  retry/read=  0.4839  starve row/Fabric=0/0  writers M/s row/Fabric=14.65/11.06  correctness=PASS  progress=PASS  PASS
+    readers= 4  row-rw=    38.29 ns (  26.11 M/s)  Fabric=    18.12 ns (  55.20 M/s)  Fabric/row=  0.47x  retry/read=  0.2932  starve row/Fabric=0/0  writers M/s row/Fabric=15.56/9.18  correctness=PASS  progress=PASS  PASS
+    readers= 5  row-rw=    62.46 ns (  16.01 M/s)  Fabric=    20.83 ns (  48.01 M/s)  Fabric/row=  0.33x  retry/read=  0.3040  starve row/Fabric=0/0  writers M/s row/Fabric=16.62/10.32  correctness=PASS  progress=PASS  PASS
+    readers= 6  row-rw=    51.53 ns (  19.41 M/s)  Fabric=    22.78 ns (  43.90 M/s)  Fabric/row=  0.44x  retry/read=  0.3461  starve row/Fabric=0/0  writers M/s row/Fabric=15.31/9.79  correctness=PASS  progress=PASS  PASS
+    readers= 7  row-rw=    55.81 ns (  17.92 M/s)  Fabric=    11.05 ns (  90.47 M/s)  Fabric/row=  0.20x  retry/read=  0.3172  starve row/Fabric=0/0  writers M/s row/Fabric=13.26/8.48  correctness=PASS  progress=PASS  PASS
+    readers= 8  row-rw=    50.01 ns (  19.99 M/s)  Fabric=    12.45 ns (  80.32 M/s)  Fabric/row=  0.25x  retry/read=  0.3630  starve row/Fabric=0/0  writers M/s row/Fabric=9.63/8.69  correctness=PASS  progress=PASS  PASS
+    readers= 9  row-rw=    57.55 ns (  17.38 M/s)  Fabric=    11.90 ns (  84.01 M/s)  Fabric/row=  0.21x  retry/read=  0.4541  starve row/Fabric=0/0  writers M/s row/Fabric=10.36/8.36  correctness=PASS  progress=PASS  PASS
+    readers=10  row-rw=    50.28 ns (  19.89 M/s)  Fabric=     9.26 ns ( 107.97 M/s)  Fabric/row=  0.18x  retry/read=  0.3656  starve row/Fabric=0/0  writers M/s row/Fabric=7.64/8.33  correctness=PASS  progress=PASS  PASS
+    readers=11  row-rw=    58.35 ns (  17.14 M/s)  Fabric=     8.99 ns ( 111.29 M/s)  Fabric/row=  0.15x  retry/read=  0.3742  starve row/Fabric=0/0  writers M/s row/Fabric=8.94/8.03  correctness=PASS  progress=PASS  PASS
+    readers=12  row-rw=    50.66 ns (  19.74 M/s)  Fabric=     8.60 ns ( 116.33 M/s)  Fabric/row=  0.17x  retry/read=  0.4102  starve row/Fabric=0/0  writers M/s row/Fabric=5.92/8.08  correctness=PASS  progress=PASS  PASS
+    readers=13  row-rw=    56.52 ns (  17.69 M/s)  Fabric=     7.59 ns ( 131.74 M/s)  Fabric/row=  0.13x  retry/read=  0.3569  starve row/Fabric=0/0  writers M/s row/Fabric=6.86/7.81  correctness=PASS  progress=PASS  PASS
+    readers=14  row-rw=    49.20 ns (  20.32 M/s)  Fabric=     7.03 ns ( 142.25 M/s)  Fabric/row=  0.14x  retry/read=  0.3690  starve row/Fabric=0/0  writers M/s row/Fabric=4.27/8.00  correctness=PASS  progress=PASS  PASS
+    readers=15  row-rw=    50.15 ns (  19.94 M/s)  Fabric=     6.62 ns ( 151.07 M/s)  Fabric/row=  0.13x  retry/read=  0.4035  starve row/Fabric=0/0  writers M/s row/Fabric=3.04/7.71  correctness=PASS  progress=PASS  PASS
+    readers=16  row-rw=    51.40 ns (  19.45 M/s)  Fabric=     6.62 ns ( 150.99 M/s)  Fabric/row=  0.13x  retry/read=  0.4085  starve row/Fabric=0/0  writers M/s row/Fabric=4.16/7.68  correctness=PASS  progress=PASS  PASS
+
+TEST 3A OVERALL: PASS
+
+================================================================================
+TEST 3B - DISTRIBUTED STABLE READS WITH TWO ACTIVE WRITERS
+================================================================================
+Two writers own separate child relations and mutate across up to 100 legal
+parents. Readers sweep every count from 1 through usable_threads-2; APC RETRY
+outcomes are retried and never counted as successful stable reads.
+
+  CASE 1/4  N=100  K=4  parent-pool=98
+    readers= 1  row-rw=    35.49 ns (  28.18 M/s)  Fabric=    58.77 ns (  17.01 M/s)  Fabric/row=  1.66x  retry/read=  0.3275  starve row/Fabric=0/0  writers M/s row/Fabric=15.26/15.08  correctness=PASS  progress=PASS  PASS
+    readers= 2  row-rw=    27.64 ns (  36.18 M/s)  Fabric=    28.73 ns (  34.81 M/s)  Fabric/row=  1.04x  retry/read=  0.2692  starve row/Fabric=0/0  writers M/s row/Fabric=16.00/11.88  correctness=PASS  progress=PASS  PASS
+    readers= 3  row-rw=    40.83 ns (  24.49 M/s)  Fabric=    18.61 ns (  53.73 M/s)  Fabric/row=  0.46x  retry/read=  0.2272  starve row/Fabric=0/0  writers M/s row/Fabric=14.86/10.60  correctness=PASS  progress=PASS  PASS
+    readers= 4  row-rw=    45.60 ns (  21.93 M/s)  Fabric=    14.37 ns (  69.61 M/s)  Fabric/row=  0.32x  retry/read=  0.1922  starve row/Fabric=0/0  writers M/s row/Fabric=14.74/9.93  correctness=PASS  progress=PASS  PASS
+    readers= 5  row-rw=    53.97 ns (  18.53 M/s)  Fabric=    13.69 ns (  73.03 M/s)  Fabric/row=  0.25x  retry/read=  0.1439  starve row/Fabric=0/0  writers M/s row/Fabric=13.54/10.72  correctness=PASS  progress=PASS  PASS
+    readers= 6  row-rw=    48.22 ns (  20.74 M/s)  Fabric=    14.63 ns (  68.34 M/s)  Fabric/row=  0.30x  retry/read=  0.2127  starve row/Fabric=0/0  writers M/s row/Fabric=12.73/10.04  correctness=PASS  progress=PASS  PASS
+    readers= 7  row-rw=    53.26 ns (  18.78 M/s)  Fabric=     9.87 ns ( 101.35 M/s)  Fabric/row=  0.19x  retry/read=  0.1932  starve row/Fabric=0/0  writers M/s row/Fabric=10.71/9.24  correctness=PASS  progress=PASS  PASS
+    readers= 8  row-rw=    51.19 ns (  19.54 M/s)  Fabric=     9.50 ns ( 105.26 M/s)  Fabric/row=  0.19x  retry/read=  0.1912  starve row/Fabric=0/0  writers M/s row/Fabric=8.55/10.01  correctness=PASS  progress=PASS  PASS
+    readers= 9  row-rw=    54.63 ns (  18.30 M/s)  Fabric=     7.78 ns ( 128.56 M/s)  Fabric/row=  0.14x  retry/read=  0.1691  starve row/Fabric=0/0  writers M/s row/Fabric=8.17/9.51  correctness=PASS  progress=PASS  PASS
+    readers=10  row-rw=    50.06 ns (  19.97 M/s)  Fabric=     6.89 ns ( 145.12 M/s)  Fabric/row=  0.14x  retry/read=  0.1825  starve row/Fabric=0/0  writers M/s row/Fabric=6.51/9.50  correctness=PASS  progress=PASS  PASS
+    readers=11  row-rw=    58.14 ns (  17.20 M/s)  Fabric=     6.78 ns ( 147.46 M/s)  Fabric/row=  0.12x  retry/read=  0.1868  starve row/Fabric=0/0  writers M/s row/Fabric=6.87/8.78  correctness=PASS  progress=PASS  PASS
+    readers=12  row-rw=    47.52 ns (  21.04 M/s)  Fabric=     5.94 ns ( 168.25 M/s)  Fabric/row=  0.13x  retry/read=  0.1910  starve row/Fabric=0/0  writers M/s row/Fabric=7.82/8.12  correctness=PASS  progress=PASS  PASS
+    readers=13  row-rw=    54.01 ns (  18.52 M/s)  Fabric=     5.67 ns ( 176.34 M/s)  Fabric/row=  0.11x  retry/read=  0.1672  starve row/Fabric=0/0  writers M/s row/Fabric=9.92/8.87  correctness=PASS  progress=PASS  PASS
+    readers=14  row-rw=    50.66 ns (  19.74 M/s)  Fabric=     5.40 ns ( 185.28 M/s)  Fabric/row=  0.11x  retry/read=  0.1881  starve row/Fabric=0/0  writers M/s row/Fabric=5.56/9.09  correctness=PASS  progress=PASS  PASS
+    readers=15  row-rw=    55.24 ns (  18.10 M/s)  Fabric=     4.82 ns ( 207.55 M/s)  Fabric/row=  0.09x  retry/read=  0.1750  starve row/Fabric=0/0  writers M/s row/Fabric=8.05/8.34  correctness=PASS  progress=PASS  PASS
+    readers=16  row-rw=    51.88 ns (  19.28 M/s)  Fabric=     5.41 ns ( 184.82 M/s)  Fabric/row=  0.10x  retry/read=  0.1878  starve row/Fabric=0/0  writers M/s row/Fabric=5.76/8.49  correctness=PASS  progress=PASS  PASS
+
+  CASE 2/4  N=100  K=32  parent-pool=98
+    readers= 1  row-rw=    41.45 ns (  24.12 M/s)  Fabric=    86.71 ns (  11.53 M/s)  Fabric/row=  2.09x  retry/read=  0.5087  starve row/Fabric=0/0  writers M/s row/Fabric=16.51/14.11  correctness=PASS  progress=PASS  PASS
+    readers= 2  row-rw=    31.32 ns (  31.93 M/s)  Fabric=    38.66 ns (  25.87 M/s)  Fabric/row=  1.23x  retry/read=  0.4687  starve row/Fabric=0/0  writers M/s row/Fabric=16.01/11.10  correctness=PASS  progress=PASS  PASS
+    readers= 3  row-rw=    35.83 ns (  27.91 M/s)  Fabric=    23.62 ns (  42.34 M/s)  Fabric/row=  0.66x  retry/read=  0.3359  starve row/Fabric=0/0  writers M/s row/Fabric=16.29/10.06  correctness=PASS  progress=PASS  PASS
+    readers= 4  row-rw=    37.99 ns (  26.32 M/s)  Fabric=    21.61 ns (  46.27 M/s)  Fabric/row=  0.57x  retry/read=  0.3642  starve row/Fabric=0/0  writers M/s row/Fabric=13.84/9.72  correctness=PASS  progress=PASS  PASS
+    readers= 5  row-rw=    42.56 ns (  23.50 M/s)  Fabric=    16.01 ns (  62.46 M/s)  Fabric/row=  0.38x  retry/read=  0.3733  starve row/Fabric=0/0  writers M/s row/Fabric=13.77/8.92  correctness=PASS  progress=PASS  PASS
+    readers= 6  row-rw=    48.08 ns (  20.80 M/s)  Fabric=    13.22 ns (  75.62 M/s)  Fabric/row=  0.28x  retry/read=  0.3350  starve row/Fabric=0/0  writers M/s row/Fabric=11.98/9.00  correctness=PASS  progress=PASS  PASS
+    readers= 7  row-rw=    48.52 ns (  20.61 M/s)  Fabric=    13.06 ns (  76.57 M/s)  Fabric/row=  0.27x  retry/read=  0.3695  starve row/Fabric=0/0  writers M/s row/Fabric=11.35/9.12  correctness=PASS  progress=PASS  PASS
+    readers= 8  row-rw=    48.37 ns (  20.67 M/s)  Fabric=    10.61 ns (  94.29 M/s)  Fabric/row=  0.22x  retry/read=  0.3498  starve row/Fabric=0/0  writers M/s row/Fabric=9.92/8.80  correctness=PASS  progress=PASS  PASS
+    readers= 9  row-rw=    43.94 ns (  22.76 M/s)  Fabric=    11.28 ns (  88.66 M/s)  Fabric/row=  0.26x  retry/read=  0.4493  starve row/Fabric=0/0  writers M/s row/Fabric=8.29/8.44  correctness=PASS  progress=PASS  PASS
+    readers=10  row-rw=    53.30 ns (  18.76 M/s)  Fabric=     9.24 ns ( 108.21 M/s)  Fabric/row=  0.17x  retry/read=  0.3862  starve row/Fabric=0/0  writers M/s row/Fabric=8.84/8.43  correctness=PASS  progress=PASS  PASS
+    readers=11  row-rw=    50.73 ns (  19.71 M/s)  Fabric=     8.74 ns ( 114.37 M/s)  Fabric/row=  0.17x  retry/read=  0.3891  starve row/Fabric=0/0  writers M/s row/Fabric=7.05/7.80  correctness=PASS  progress=PASS  PASS
+    readers=12  row-rw=    55.09 ns (  18.15 M/s)  Fabric=     9.15 ns ( 109.31 M/s)  Fabric/row=  0.17x  retry/read=  0.5190  starve row/Fabric=0/0  writers M/s row/Fabric=8.48/8.43  correctness=PASS  progress=PASS  PASS
+    readers=13  row-rw=    50.99 ns (  19.61 M/s)  Fabric=     8.01 ns ( 124.84 M/s)  Fabric/row=  0.16x  retry/read=  0.4261  starve row/Fabric=0/0  writers M/s row/Fabric=6.03/8.09  correctness=PASS  progress=PASS  PASS
+    readers=14  row-rw=    56.93 ns (  17.56 M/s)  Fabric=     6.48 ns ( 154.21 M/s)  Fabric/row=  0.11x  retry/read=  0.3815  starve row/Fabric=0/0  writers M/s row/Fabric=7.73/8.56  correctness=PASS  progress=PASS  PASS
+    readers=15  row-rw=    52.64 ns (  19.00 M/s)  Fabric=     6.12 ns ( 163.49 M/s)  Fabric/row=  0.12x  retry/read=  0.3310  starve row/Fabric=0/0  writers M/s row/Fabric=6.09/7.65  correctness=PASS  progress=PASS  PASS
+    readers=16  row-rw=    57.52 ns (  17.38 M/s)  Fabric=     5.70 ns ( 175.56 M/s)  Fabric/row=  0.10x  retry/read=  0.3076  starve row/Fabric=0/0  writers M/s row/Fabric=7.07/8.19  correctness=PASS  progress=PASS  PASS
+
+  CASE 3/4  N=10000  K=4  parent-pool=100
+    readers= 1  row-rw=    32.38 ns (  30.89 M/s)  Fabric=    55.75 ns (  17.94 M/s)  Fabric/row=  1.72x  retry/read=  0.3268  starve row/Fabric=0/0  writers M/s row/Fabric=18.01/15.60  correctness=PASS  progress=PASS  PASS
+    readers= 2  row-rw=    25.03 ns (  39.96 M/s)  Fabric=    29.40 ns (  34.02 M/s)  Fabric/row=  1.17x  retry/read=  0.2610  starve row/Fabric=0/0  writers M/s row/Fabric=16.92/13.21  correctness=PASS  progress=PASS  PASS
+    readers= 3  row-rw=    32.33 ns (  30.93 M/s)  Fabric=    17.72 ns (  56.44 M/s)  Fabric/row=  0.55x  retry/read=  0.1474  starve row/Fabric=0/0  writers M/s row/Fabric=17.58/11.68  correctness=PASS  progress=PASS  PASS
+    readers= 4  row-rw=    39.63 ns (  25.23 M/s)  Fabric=    14.39 ns (  69.51 M/s)  Fabric/row=  0.36x  retry/read=  0.2329  starve row/Fabric=0/0  writers M/s row/Fabric=16.36/10.44  correctness=PASS  progress=PASS  PASS
+    readers= 5  row-rw=    48.93 ns (  20.44 M/s)  Fabric=    12.46 ns (  80.26 M/s)  Fabric/row=  0.25x  retry/read=  0.1601  starve row/Fabric=0/0  writers M/s row/Fabric=17.15/10.43  correctness=PASS  progress=PASS  PASS
+    readers= 6  row-rw=    48.20 ns (  20.75 M/s)  Fabric=    11.15 ns (  89.67 M/s)  Fabric/row=  0.23x  retry/read=  0.2122  starve row/Fabric=0/0  writers M/s row/Fabric=14.73/9.00  correctness=PASS  progress=PASS  PASS
+    readers= 7  row-rw=    44.41 ns (  22.52 M/s)  Fabric=     9.91 ns ( 100.90 M/s)  Fabric/row=  0.22x  retry/read=  0.1683  starve row/Fabric=0/0  writers M/s row/Fabric=13.54/10.23  correctness=PASS  progress=PASS  PASS
+    readers= 8  row-rw=    44.69 ns (  22.38 M/s)  Fabric=     9.77 ns ( 102.31 M/s)  Fabric/row=  0.22x  retry/read=  0.2037  starve row/Fabric=0/0  writers M/s row/Fabric=10.53/9.52  correctness=PASS  progress=PASS  PASS
+    readers= 9  row-rw=    46.73 ns (  21.40 M/s)  Fabric=     7.95 ns ( 125.78 M/s)  Fabric/row=  0.17x  retry/read=  0.1865  starve row/Fabric=0/0  writers M/s row/Fabric=11.16/9.13  correctness=PASS  progress=PASS  PASS
+    readers=10  row-rw=    49.19 ns (  20.33 M/s)  Fabric=     6.95 ns ( 143.82 M/s)  Fabric/row=  0.14x  retry/read=  0.1842  starve row/Fabric=0/0  writers M/s row/Fabric=7.51/8.36  correctness=PASS  progress=PASS  PASS
+    readers=11  row-rw=    57.38 ns (  17.43 M/s)  Fabric=     7.40 ns ( 135.06 M/s)  Fabric/row=  0.13x  retry/read=  0.2153  starve row/Fabric=0/0  writers M/s row/Fabric=8.41/9.59  correctness=PASS  progress=PASS  PASS
+    readers=12  row-rw=    51.39 ns (  19.46 M/s)  Fabric=     6.35 ns ( 157.53 M/s)  Fabric/row=  0.12x  retry/read=  0.1958  starve row/Fabric=0/0  writers M/s row/Fabric=6.95/8.93  correctness=PASS  progress=PASS  PASS
+    readers=13  row-rw=    50.21 ns (  19.92 M/s)  Fabric=     5.67 ns ( 176.42 M/s)  Fabric/row=  0.11x  retry/read=  0.1572  starve row/Fabric=0/0  writers M/s row/Fabric=7.01/8.78  correctness=PASS  progress=PASS  PASS
+    readers=14  row-rw=    55.20 ns (  18.12 M/s)  Fabric=     5.52 ns ( 181.05 M/s)  Fabric/row=  0.10x  retry/read=  0.2041  starve row/Fabric=0/0  writers M/s row/Fabric=5.99/9.14  correctness=PASS  progress=PASS  PASS
+    readers=15  row-rw=    46.77 ns (  21.38 M/s)  Fabric=     4.97 ns ( 201.09 M/s)  Fabric/row=  0.11x  retry/read=  0.1390  starve row/Fabric=0/0  writers M/s row/Fabric=3.88/9.19  correctness=PASS  progress=PASS  PASS
+    readers=16  row-rw=    54.64 ns (  18.30 M/s)  Fabric=     4.67 ns ( 214.36 M/s)  Fabric/row=  0.09x  retry/read=  0.1985  starve row/Fabric=0/0  writers M/s row/Fabric=4.73/7.85  correctness=PASS  progress=PASS  PASS
+
+  CASE 4/4  N=10000  K=32  parent-pool=100
+    readers= 1  row-rw=    21.82 ns (  45.84 M/s)  Fabric=    69.70 ns (  14.35 M/s)  Fabric/row=  3.20x  retry/read=  0.4712  starve row/Fabric=0/0  writers M/s row/Fabric=19.13/13.86  correctness=PASS  progress=PASS  PASS
+    readers= 2  row-rw=    27.57 ns (  36.27 M/s)  Fabric=    40.09 ns (  24.95 M/s)  Fabric/row=  1.45x  retry/read=  0.5283  starve row/Fabric=0/0  writers M/s row/Fabric=16.75/11.67  correctness=PASS  progress=PASS  PASS
+    readers= 3  row-rw=    26.83 ns (  37.27 M/s)  Fabric=    25.66 ns (  38.97 M/s)  Fabric/row=  0.96x  retry/read=  0.3773  starve row/Fabric=0/0  writers M/s row/Fabric=14.90/10.46  correctness=PASS  progress=PASS  PASS
+    readers= 4  row-rw=    29.49 ns (  33.91 M/s)  Fabric=    19.09 ns (  52.38 M/s)  Fabric/row=  0.65x  retry/read=  0.3396  starve row/Fabric=0/0  writers M/s row/Fabric=15.18/8.94  correctness=PASS  progress=PASS  PASS
+    readers= 5  row-rw=    53.96 ns (  18.53 M/s)  Fabric=    24.00 ns (  41.67 M/s)  Fabric/row=  0.44x  retry/read=  0.3364  starve row/Fabric=0/0  writers M/s row/Fabric=14.46/10.78  correctness=PASS  progress=PASS  PASS
+    readers= 6  row-rw=    48.02 ns (  20.82 M/s)  Fabric=    22.72 ns (  44.01 M/s)  Fabric/row=  0.47x  retry/read=  0.3154  starve row/Fabric=0/0  writers M/s row/Fabric=12.97/10.48  correctness=PASS  progress=PASS  PASS
+    readers= 7  row-rw=    44.51 ns (  22.47 M/s)  Fabric=    17.77 ns (  56.28 M/s)  Fabric/row=  0.40x  retry/read=  0.3070  starve row/Fabric=0/0  writers M/s row/Fabric=12.29/9.93  correctness=PASS  progress=PASS  PASS
+    readers= 8  row-rw=    46.52 ns (  21.50 M/s)  Fabric=    15.06 ns (  66.40 M/s)  Fabric/row=  0.32x  retry/read=  0.4321  starve row/Fabric=0/0  writers M/s row/Fabric=10.81/8.41  correctness=PASS  progress=PASS  PASS
+    readers= 9  row-rw=    49.56 ns (  20.18 M/s)  Fabric=     9.95 ns ( 100.50 M/s)  Fabric/row=  0.20x  retry/read=  0.3480  starve row/Fabric=0/0  writers M/s row/Fabric=9.23/9.54  correctness=PASS  progress=PASS  PASS
+    readers=10  row-rw=    47.39 ns (  21.10 M/s)  Fabric=     9.33 ns ( 107.15 M/s)  Fabric/row=  0.20x  retry/read=  0.3653  starve row/Fabric=0/0  writers M/s row/Fabric=7.63/8.35  correctness=PASS  progress=PASS  PASS
+    readers=11  row-rw=    59.89 ns (  16.70 M/s)  Fabric=     9.22 ns ( 108.42 M/s)  Fabric/row=  0.15x  retry/read=  0.3843  starve row/Fabric=0/0  writers M/s row/Fabric=8.08/8.22  correctness=PASS  progress=PASS  PASS
+    readers=12  row-rw=    51.41 ns (  19.45 M/s)  Fabric=     8.60 ns ( 116.29 M/s)  Fabric/row=  0.17x  retry/read=  0.4396  starve row/Fabric=0/0  writers M/s row/Fabric=6.18/8.20  correctness=PASS  progress=PASS  PASS
+    readers=13  row-rw=    54.78 ns (  18.26 M/s)  Fabric=     7.71 ns ( 129.71 M/s)  Fabric/row=  0.14x  retry/read=  0.3803  starve row/Fabric=0/0  writers M/s row/Fabric=4.33/8.10  correctness=PASS  progress=PASS  PASS
+    readers=14  row-rw=    52.53 ns (  19.04 M/s)  Fabric=     7.18 ns ( 139.32 M/s)  Fabric/row=  0.14x  retry/read=  0.3925  starve row/Fabric=0/0  writers M/s row/Fabric=2.99/7.82  correctness=PASS  progress=PASS  PASS
+    readers=15  row-rw=    51.64 ns (  19.37 M/s)  Fabric=     6.59 ns ( 151.85 M/s)  Fabric/row=  0.13x  retry/read=  0.4015  starve row/Fabric=0/0  writers M/s row/Fabric=3.82/7.69  correctness=PASS  progress=PASS  PASS
+    readers=16  row-rw=    51.70 ns (  19.34 M/s)  Fabric=     5.93 ns ( 168.50 M/s)  Fabric/row=  0.11x  retry/read=  0.3894  starve row/Fabric=0/0  writers M/s row/Fabric=2.07/7.80  correctness=PASS  progress=PASS  PASS
+
+TEST 3B OVERALL: PASS
+
+TEST 3 OVERALL: PASS
+
+================================================================================
+TEST 4 - PUBLIC DAG MUTATION API PAIRS AND MULTI-PARENT ISOLATION
+================================================================================
+  child-side and parent-side API symmetry : PASS
+  duplicate relation rejected             : PASS
+  third parent at K=2 rejected            : PASS
+  H/V rows remain independent             : PASS
+
+TEST 4 OVERALL: PASS
+
+================================================================================
+TEST 5 - H-UNION-V ACYCLIC DAG, MULTI-PARENT CAPACITY, CYCLE REJECTION
+================================================================================
+  legal mixed-axis diamond              : PASS
+  every backward/self insertion rejected: PASS
+  attempted H-union-V cycle rejected    : PASS
+  K=2 independently enforced on H and V : PASS
+  failed replacement preserves old edge : PASS
+  exhaustive public-read topological sort: PASS
+
+TEST 5 OVERALL: PASS
+
+================================================================================
+TEST 6 - REGION SCHEMA / DEVICE VIEW / PROTOCOL STORAGE / DTYPES
+================================================================================
+  8-cell header + 40-byte schema ABI     : PASS
+  Fabric construction validation         : PASS
+  invalid schema rollback + slot reuse   : PASS
+  compact rows + metadata + MPMC sequence: PASS
+  retirement/reuse clears data and schema: PASS
+
+  uint8_t    private=PASS atomic=PASS immutable=PASS
+  uint16_t   private=PASS atomic=PASS immutable=PASS
+  uint32_t   private=PASS atomic=PASS immutable=PASS
+  uint64_t   private=PASS atomic=PASS immutable=PASS
+  int8_t     private=PASS atomic=PASS immutable=PASS
+  int16_t    private=PASS atomic=PASS immutable=PASS
+  int32_t    private=PASS atomic=PASS immutable=PASS
+  int64_t    private=PASS atomic=PASS immutable=PASS
+  float      private=PASS atomic=PASS immutable=PASS
+  double     private=PASS atomic=PASS immutable=PASS
+  char       private=PASS atomic=PASS immutable=PASS
+
+TEST 6 OVERALL: PASS
+
+================================================================================
+TEST 7 - CONCURRENT H/V DAG MUTATION + RETIREMENT / ABA
+================================================================================
+  A--H-->B raced with illegal B--V-->A : PASS
+  shared-parent mixed H/V stress       : PASS
+  transaction retries observed         : 691185
+  linked/pinned retirement + ABA reuse : PASS
+  direct slot/generation resolver + ABA: PASS
+  shutdown drains outstanding RegionView: PASS
+
+TEST 7 OVERALL: PASS
+
+================================================================================
+TEST 8 - FULL-SLAB SAVE / ATTACH / DETACH RELOCATION
+================================================================================
+  SaveFabric succeeds and source resumes       PASS
+  first attach uses different slab address     PASS
+  first relocated payload                      PASS
+  first relocated H topology                   PASS
+  DetachFabric preserves borrowed image        PASS
+  second attach uses another slab address      PASS
+  second relocated payload                     PASS
+  second relocated H topology                  PASS
+  address-independent slab image               PASS
+  wrong supplied cell count rejected           PASS
+  incompatible format version rejected         PASS
+  source address                               00000208E591A3C0
+  first relocated address                      00000208E6279620
+  second relocated address                     00000208E627B660
+
+TEST 8 OVERALL: PASS
+
+================================================================================
+SUPERNOVA APC/FABRIC SYSTEMS TEST SUITE SUMMARY
+================================================================================
+  Test 1 - scaled fair bidirectional DAG benchmark      PASS
+  Test 2 - hotspot + distributed mutation               PASS
+  Test 3 - hotspot + distributed readers                PASS
+  Test 4 - public mutation API                          PASS
+  Test 5 - combined DAG proof                           PASS
+  Test 6 - region schema and views                      PASS
+  Test 7 - concurrency and retirement                   PASS
+  Test 8 - full-slab relocation                         PASS
+
+  failures: 0
+================================================================================
+
+================================================================================
+GHGF PAPER VALIDATION TEST KIT - TESTS A-J
+================================================================================
+
+================================================================================
+TEST A - ZERO-RATE TRAINING IDENTITY
+================================================================================
+  maximum prediction difference                 0.000000000
+  zero-rate Train == Update                       PASS
+
+================================================================================
+TEST B - OBSERVATION BIAS / TONIC-DRIFT LEARNING
+================================================================================
+  learned mean probability                     0.799772
+  target probability                           0.800000
+  initial 0.5 loss                             0.693147
+  learned loss                                 0.500403
+  bias approaches empirical Bernoulli rate        PASS
+  bias learning lowers binary loss                PASS
+
+================================================================================
+TEST C - H-COUPLING INTERNAL LEARNING
+================================================================================
+  frozen coupling loss                         0.622450360
+  internally learned coupling loss             0.242711351
+  H coupling lowers cold-start loss               PASS
+
+================================================================================
+TEST D - H-COUPLING FINITE-DIFFERENCE DIRECTION
+================================================================================
+  loss(k-eps)                                  0.434476032
+  loss(k)                                      0.375584089
+  loss(k+eps)                                  0.328650135
+  numerical dLoss/dk                           -0.529129477
+  local-vs-preferred prediction dot            0.075516688
+  local learned loss                           0.258867344
+  finite difference has a resolvable direction    PASS
+  local H update moves toward better side         PASS
+  local H update lowers probe loss                PASS
+
+================================================================================
+TEST E - DRIFT / BIAS DIRECTION VS GLOBAL FIT ORACLE
+================================================================================
+  baseline loss                                0.693147181
+  local drift loss                             0.205894563
+  global-fit drift loss                        0.201413320
+  local/global prediction-direction dot        1.595081851
+  local drift lowers loss                         PASS
+  global drift fit lowers loss                    PASS
+  local drift agrees with global-fit direction    PASS
+
+================================================================================
+TEST F - TEMPORAL / AUTO-CONNECTION LEARNING
+================================================================================
+  fixed lambda loss                             0.734727850
+  locally learned lambda loss                   0.718385670
+  globally fitted lambda loss                   0.693147181
+  local/global prediction-direction dot         0.021128564
+  temporal learning lowers alternating loss       PASS
+  global temporal fit is non-regressive           PASS
+  local temporal direction agrees with fitter     PASS
+
+================================================================================
+TEST G - TONIC-VOLATILITY INTERNAL LEARNING
+================================================================================
+  fixed volatility loss                         0.708268304
+  locally learned volatility loss               0.708268287
+  globally fitted volatility loss               0.708156229
+  local prediction delta^2                      1.629985036e-11
+  local mean squared prediction effect          1.697901079e-13
+  local/global prediction-direction dot         -1.637016104e-06
+  tonic volatility has meaningful held-out effect FAIL
+  local volatility lowers held-out loss           FAIL
+  global volatility fit is non-regressive         PASS
+  global-fit direction diagnostic               DIFFERENT (not a hard failure)
+
+================================================================================
+TEST H - V-COUPLING INTERNAL LEARNING
+================================================================================
+  fixed V-coupling loss                         0.709934815
+  locally learned V-coupling loss               0.709934814
+  globally fitted V-coupling loss               0.698836992
+  local prediction delta^2                      5.551803461e-11
+  local mean squared prediction effect          4.337346454e-13
+  local/global prediction-direction dot         -6.185411974e-06
+  V coupling has meaningful held-out effect       FAIL
+  local V learning lowers held-out loss           FAIL
+  global V fit is non-regressive                  PASS
+  global-fit direction diagnostic               DIFFERENT (not a hard failure)
+
+================================================================================
+TEST I - ONLINE CONCURRENT PREDICTIVE-STRUCTURE LEARNING
+================================================================================
+  shallow validation loss                       0.601197302
+  shallow penalized score                       0.612204180
+  hierarchical validation loss                  0.482745413
+  hierarchical penalized score                  0.504759170
+  validation decision margin                    0.107445011
+  hierarchical held-out test loss               0.475848467
+  shallow held-out test loss                    0.597261264
+  concurrent elapsed seconds                    0.030848900
+  numeric successes / failed attempts           31700 / 1068
+  snapshot success / retry / rejected           51039 / 14497 / 0
+  mutation success / retry / stale / rejected   32768 / 0 / 0 / 0
+  numeric attempts per second                   1062209.673602625
+  mutation attempts per second                  1062209.673602625
+  optimistic mutation contract is coherent        PASS
+  validation accepts live hierarchical edge       PASS
+  accepted edge improves untouched test data      PASS
+  same-model concurrent stress preserves invariantsPASS
+  NOTE: failed numeric attempts are reported, not relabeled as retries;
+        the numeric API returns bool and does not expose retry status.
+
+================================================================================
+TEST J - TIMING AND INDEPENDENT-MODEL PARALLELISM
+================================================================================
+  compiler                                       MSVC 1950
+  __cplusplus                                    199711
+  timed steps per worker                         32768
+  batch samples per time-step                    16
+  sequential median repetitions                 9
+  parallel median repetitions                   7
+  hardware_concurrency reported                 20
+  construction amortized ns/model               1257.666016
+  predict+update median ns/time-step             529.467773
+  predict+update median M samples/s              30.219025
+  predict+train median ns/time-step              596.459961
+  predict+train median M samples/s               26.824936
+
+  Independent models; predict+train aggregate throughput:
+    threads=1   M samples/s=26.682817     speedup=1.000000    efficiency=1.000000
+    threads=2   M samples/s=50.997802     speedup=1.911260    efficiency=0.955630
+    threads=4   M samples/s=99.069934     speedup=3.712874    efficiency=0.928218
+    threads=8   M samples/s=185.084195    speedup=6.936456    efficiency=0.867057
+  sequential timing samples are valid             PASS
+  parallel workers completed valid workloads      PASS
+  NOTE: parallel rows use separate model instances; no same-model
+        thread-safety or latency claim is implied.
+
+================================================================================
+GHGF PAPER VALIDATION TEST SUMMARY
+================================================================================
+  Test A - zero-rate identity                     PASS  1.304 ms
+  Test B - observation bias                       PASS  1.984 ms
+  Test C - H coupling learning                    PASS  1.421 ms
+  Test D - H finite-difference direction          PASS  3.481 ms
+  Test E - drift/global-oracle agreement          PASS  3.132 ms
+  Test F - temporal parameter                     PASS  2.873 ms
+  Test G - tonic-volatility efficacy              FAIL  4.088 ms
+  Test H - V-coupling efficacy                    FAIL  5.683 ms
+  Test I - online concurrent structural learning  PASS  36.065 ms
+  Test J - timing/independent parallelism         PASS  968.636 ms
+
+  failures: 2
+================================================================================
+PS C:\PAPER\LCIM-BitTheorium> 
