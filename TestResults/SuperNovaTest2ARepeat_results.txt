@@ -1,0 +1,87 @@
+SUPERNOVA FABRIC TEST 2A MUTATION-RESULT REPEAT TEST
+repeats=1000
+writer_sweep=1..16
+measured_runs_per_point=4
+INVALID=FAIL
+RETRY=COUNTED_NOT_FAILURE
+
+RETRY repeat=1 case=2 N=100 K=32 writers=13 sample=3 success=48424 retries=2144710 invalid=0 retry-exhaust=1 retry/success=44.2902
+RETRY repeat=2 case=3 N=10000 K=4 writers=15 sample=1 success=54488 retries=2373000 invalid=0 retry-exhaust=2 retry/success=43.5509
+RETRY repeat=2 case=3 N=10000 K=4 writers=15 sample=2 success=56344 retries=2637696 invalid=0 retry-exhaust=4 retry/success=46.8141
+RETRY repeat=29 case=4 N=10000 K=32 writers=16 sample=1 success=40244 retries=2316802 invalid=0 retry-exhaust=6 retry/success=57.5689
+RETRY repeat=30 case=1 N=100 K=4 writers=14 sample=1 success=47299 retries=2318646 invalid=0 retry-exhaust=5 retry/success=49.0210
+RETRY repeat=30 case=1 N=100 K=4 writers=14 sample=3 success=35192 retries=1820011 invalid=0 retry-exhaust=6 retry/success=51.7166
+RETRY repeat=30 case=1 N=100 K=4 writers=14 sample=4 success=17886 retries=1291578 invalid=0 retry-exhaust=10 retry/success=72.2117
+RETRY repeat=30 case=1 N=100 K=4 writers=15 sample=1 success=55432 retries=1718649 invalid=0 retry-exhaust=2 retry/success=31.0046
+RETRY repeat=30 case=1 N=100 K=4 writers=16 sample=1 success=61342 retries=2139267 invalid=0 retry-exhaust=2 retry/success=34.8744
+RETRY repeat=71 case=3 N=10000 K=4 writers=13 sample=1 success=42188 retries=1910867 invalid=0 retry-exhaust=3 retry/success=45.2941
+RETRY repeat=141 case=2 N=100 K=32 writers=14 sample=1 success=54877 retries=2214892 invalid=0 retry-exhaust=1 retry/success=40.3610
+RETRY repeat=145 case=2 N=100 K=32 writers=14 sample=4 success=50752 retries=2083587 invalid=0 retry-exhaust=3 retry/success=41.0543
+RETRY repeat=188 case=3 N=10000 K=4 writers=13 sample=3 success=29756 retries=1393311 invalid=0 retry-exhaust=8 retry/success=46.8245
+RETRY repeat=188 case=3 N=10000 K=4 writers=13 sample=4 success=12012 retries=1087061 invalid=0 retry-exhaust=10 retry/success=90.4979
+RETRY repeat=188 case=3 N=10000 K=4 writers=14 sample=1 success=36550 retries=2189333 invalid=0 retry-exhaust=7 retry/success=59.8997
+RETRY repeat=188 case=3 N=10000 K=4 writers=14 sample=2 success=41760 retries=1799521 invalid=0 retry-exhaust=5 retry/success=43.0920
+RETRY repeat=192 case=3 N=10000 K=4 writers=13 sample=4 success=47502 retries=1994911 invalid=0 retry-exhaust=2 retry/success=41.9964
+RETRY repeat=207 case=4 N=10000 K=32 writers=15 sample=4 success=50947 retries=2419623 invalid=0 retry-exhaust=3 retry/success=47.4929
+RETRY repeat=249 case=2 N=100 K=32 writers=16 sample=1 success=53752 retries=5094945 invalid=0 retry-exhaust=3 retry/success=94.7861
+RETRY repeat=249 case=2 N=100 K=32 writers=16 sample=2 success=58194 retries=2952216 invalid=0 retry-exhaust=2 retry/success=50.7306
+RETRY repeat=255 case=2 N=100 K=32 writers=11 sample=1 success=43682 retries=1672710 invalid=0 retry-exhaust=1 retry/success=38.2929
+RETRY repeat=257 case=2 N=100 K=32 writers=13 sample=3 success=48712 retries=2459080 invalid=0 retry-exhaust=1 retry/success=50.4820
+RETRY repeat=262 case=1 N=100 K=4 writers=13 sample=2 success=33254 retries=1370329 invalid=0 retry-exhaust=7 retry/success=41.2079
+RETRY repeat=268 case=4 N=10000 K=32 writers=16 sample=4 success=61394 retries=2777052 invalid=0 retry-exhaust=1 retry/success=45.2333
+RETRY repeat=271 case=3 N=10000 K=4 writers=14 sample=3 success=48696 retries=2472537 invalid=0 retry-exhaust=4 retry/success=50.7750
+RETRY repeat=271 case=3 N=10000 K=4 writers=15 sample=1 success=48216 retries=2287023 invalid=0 retry-exhaust=3 retry/success=47.4329
+RETRY repeat=274 case=2 N=100 K=32 writers=15 sample=2 success=30492 retries=1797028 invalid=0 retry-exhaust=10 retry/success=58.9344
+RETRY repeat=301 case=2 N=100 K=32 writers=13 sample=2 success=49413 retries=2504403 invalid=0 retry-exhaust=1 retry/success=50.6831
+RETRY repeat=301 case=2 N=100 K=32 writers=15 sample=3 success=51470 retries=3593416 invalid=0 retry-exhaust=4 retry/success=69.8157
+RETRY repeat=301 case=2 N=100 K=32 writers=16 sample=1 success=57110 retries=2573348 invalid=0 retry-exhaust=2 retry/success=45.0595
+RETRY repeat=306 case=4 N=10000 K=32 writers=16 sample=3 success=54810 retries=2284794 invalid=0 retry-exhaust=3 retry/success=41.6857
+RETRY repeat=306 case=4 N=10000 K=32 writers=16 sample=4 success=40518 retries=2410721 invalid=0 retry-exhaust=7 retry/success=59.4975
+RETRY repeat=340 case=1 N=100 K=4 writers=16 sample=2 success=51702 retries=2310038 invalid=0 retry-exhaust=4 retry/success=44.6799
+RETRY repeat=348 case=3 N=10000 K=4 writers=16 sample=4 success=61421 retries=2146200 invalid=0 retry-exhaust=1 retry/success=34.9424
+RETRY repeat=383 case=3 N=10000 K=4 writers=9 sample=3 success=30165 retries=1150501 invalid=0 retry-exhaust=3 retry/success=38.1403
+RETRY repeat=389 case=3 N=10000 K=4 writers=16 sample=3 success=45546 retries=2316822 invalid=0 retry-exhaust=6 retry/success=50.8677
+RETRY repeat=392 case=3 N=10000 K=4 writers=15 sample=1 success=57821 retries=2219111 invalid=0 retry-exhaust=1 retry/success=38.3790
+RETRY repeat=392 case=3 N=10000 K=4 writers=15 sample=2 success=38920 retries=1957333 invalid=0 retry-exhaust=6 retry/success=50.2912
+RETRY repeat=394 case=3 N=10000 K=4 writers=16 sample=2 success=58800 retries=3281519 invalid=0 retry-exhaust=2 retry/success=55.8081
+RETRY repeat=395 case=2 N=100 K=32 writers=14 sample=4 success=52536 retries=2256949 invalid=0 retry-exhaust=2 retry/success=42.9600
+RETRY repeat=395 case=2 N=100 K=32 writers=15 sample=2 success=56026 retries=2332418 invalid=0 retry-exhaust=2 retry/success=41.6310
+RETRY repeat=395 case=2 N=100 K=32 writers=16 sample=2 success=40290 retries=1911894 invalid=0 retry-exhaust=6 retry/success=47.4533
+RETRY repeat=396 case=4 N=10000 K=32 writers=16 sample=4 success=61132 retries=2786336 invalid=0 retry-exhaust=2 retry/success=45.5790
+RETRY repeat=401 case=2 N=100 K=32 writers=16 sample=1 success=60288 retries=2636059 invalid=0 retry-exhaust=3 retry/success=43.7244
+RETRY repeat=403 case=3 N=10000 K=4 writers=16 sample=2 success=55177 retries=2265050 invalid=0 retry-exhaust=3 retry/success=41.0506
+RETRY repeat=406 case=4 N=10000 K=32 writers=14 sample=1 success=25512 retries=1544975 invalid=0 retry-exhaust=10 retry/success=60.5588
+RETRY repeat=418 case=2 N=100 K=32 writers=14 sample=3 success=43446 retries=2109756 invalid=0 retry-exhaust=5 retry/success=48.5604
+RETRY repeat=422 case=3 N=10000 K=4 writers=14 sample=3 success=47264 retries=1824787 invalid=0 retry-exhaust=4 retry/success=38.6084
+RETRY repeat=423 case=2 N=100 K=32 writers=13 sample=3 success=47626 retries=3029398 invalid=0 retry-exhaust=2 retry/success=63.6081
+RETRY repeat=469 case=3 N=10000 K=4 writers=13 sample=3 success=50896 retries=1945726 invalid=0 retry-exhaust=1 retry/success=38.2294
+RETRY repeat=509 case=3 N=10000 K=4 writers=16 sample=2 success=60853 retries=3045547 invalid=0 retry-exhaust=1 retry/success=50.0476
+RETRY repeat=514 case=1 N=100 K=4 writers=13 sample=2 success=38096 retries=1718521 invalid=0 retry-exhaust=6 retry/success=45.1103
+RETRY repeat=514 case=1 N=100 K=4 writers=14 sample=1 success=47160 retries=2268391 invalid=0 retry-exhaust=3 retry/success=48.0999
+RETRY repeat=561 case=2 N=100 K=32 writers=16 sample=3 success=44520 retries=1918566 invalid=0 retry-exhaust=6 retry/success=43.0945
+RETRY repeat=617 case=4 N=10000 K=32 writers=15 sample=3 success=34984 retries=1447070 invalid=0 retry-exhaust=8 retry/success=41.3638
+RETRY repeat=617 case=4 N=10000 K=32 writers=15 sample=4 success=59034 retries=2384176 invalid=0 retry-exhaust=2 retry/success=40.3865
+RETRY repeat=617 case=4 N=10000 K=32 writers=16 sample=1 success=54848 retries=2963126 invalid=0 retry-exhaust=4 retry/success=54.0243
+RETRY repeat=618 case=3 N=10000 K=4 writers=16 sample=4 success=56668 retries=2630380 invalid=0 retry-exhaust=2 retry/success=46.4174
+RETRY repeat=634 case=3 N=10000 K=4 writers=16 sample=1 success=55726 retries=2189638 invalid=0 retry-exhaust=4 retry/success=39.2929
+RETRY repeat=742 case=2 N=100 K=32 writers=16 sample=4 success=50924 retries=2697271 invalid=0 retry-exhaust=4 retry/success=52.9666
+RETRY repeat=745 case=1 N=100 K=4 writers=16 sample=4 success=53804 retries=2060184 invalid=0 retry-exhaust=4 retry/success=38.2905
+RETRY repeat=790 case=3 N=10000 K=4 writers=16 sample=4 success=43518 retries=2347431 invalid=0 retry-exhaust=6 retry/success=53.9416
+RETRY repeat=840 case=2 N=100 K=32 writers=15 sample=1 success=56540 retries=3016753 invalid=0 retry-exhaust=1 retry/success=53.3561
+RETRY repeat=843 case=1 N=100 K=4 writers=11 sample=4 success=24524 retries=910432 invalid=0 retry-exhaust=5 retry/success=37.1241
+RETRY repeat=862 case=4 N=10000 K=32 writers=14 sample=1 success=46658 retries=3072428 invalid=0 retry-exhaust=6 retry/success=65.8500
+RETRY repeat=878 case=3 N=10000 K=4 writers=16 sample=4 success=58940 retries=2912215 invalid=0 retry-exhaust=5 retry/success=49.4098
+RETRY repeat=894 case=1 N=100 K=4 writers=13 sample=2 success=47243 retries=1584629 invalid=0 retry-exhaust=3 retry/success=33.5421
+RETRY repeat=920 case=1 N=100 K=4 writers=16 sample=2 success=36509 retries=1627946 invalid=0 retry-exhaust=7 retry/success=44.5903
+RETRY repeat=920 case=1 N=100 K=4 writers=16 sample=4 success=56792 retries=2599748 invalid=0 retry-exhaust=2 retry/success=45.7767
+
+============================================================
+FINAL SUMMARY
+repeats=1000
+invalid_repetitions=0
+retry_repetitions=49
+committed_cases=255931
+invalid_cases=0
+retry_cases=69
+result=PASS
+============================================================
