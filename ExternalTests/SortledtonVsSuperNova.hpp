@@ -17,9 +17,10 @@
 //   SortledtonVsSuperNova_results.txt
 //
 // Benchmark representations:
-//   S-native : one directed Sortledton edge per logical parent relation.
-//              This is the native/lower-bound contract and intentionally has
-//              no reverse-child adjacency.
+//   S-absolute native lower bound: K=1 one-way parent per child/axis, a
+//              measured weaker contract, not a theoretical lower bound.
+//   S-native DAG: K-parent one-way Sortledton graph without reverse adjacency.
+//              The legacy text report calls this S-native.
 //   S-bidir  : two directed Sortledton edges per logical relation so parent
 //              lookup + reverse-child traversal match Fabric end to end.
 //   Fabric   : SuperNova's native bounded bidirectional DAG representation.
@@ -1295,6 +1296,34 @@ private:
 
 using SortledtonBidirBackend = SortledtonBackend<true>;
 using SortledtonNativeBackend = SortledtonBackend<false>;
+using SortledtonNativeDAGBackend = SortledtonNativeBackend;
+
+// Capacity-one, one-way graph mapping: a lower bound for the structural
+// workload, not a full K-parent or reverse-child representation.
+class SortledtonAbsoluteNativeBackend : public SortledtonBackend<false>
+{
+public:
+    bool Initialize(std::size_t nodes, std::size_t words, std::uint8_t k,
+                    bool single_payload_region = false)
+    {
+        if (!k) return false;
+        return SortledtonBackend<false>::Initialize(nodes, words, 1u,
+            single_payload_region);
+    }
+};
+
+inline bool ReverseContains(SortledtonNativeBackend& backend,
+    std::size_t parent, std::size_t child, Axis axis, std::size_t)
+{
+    const auto found = backend.FindParent(child, axis, 0u, DEFAULT_MAX_TRIES);
+    return found.ContractValid() && found.IsFound() && found.Node == parent;
+}
+inline bool ReverseContains(SortledtonAbsoluteNativeBackend& backend,
+    std::size_t parent, std::size_t child, Axis axis, std::size_t)
+{
+    const auto found = backend.FindParent(child, axis, 0u, DEFAULT_MAX_TRIES);
+    return found.ContractValid() && found.IsFound() && found.Node == parent;
+}
 
 namespace ExternalFairness
 {
@@ -1362,7 +1391,7 @@ bool VerifyReverseIfRequested(
 
     if constexpr (HasReverseTraversal<Backend>)
     {
-        return ReverseContains(backend, parent, child, axis, node_count);
+        return APCDAGTests::BenchmarkCore::ReverseContains(backend, parent, child, axis, node_count);
     }
     else
     {

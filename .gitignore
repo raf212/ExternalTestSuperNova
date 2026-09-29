@@ -16,3 +16,5 @@ Dump
 *.so
 *.pyd
 /LiveGraphVsSuperNova_results.txt
+/results
+/all_systems_benchmark

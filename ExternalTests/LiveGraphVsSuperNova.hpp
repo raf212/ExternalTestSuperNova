@@ -9,13 +9,16 @@
 // in the process working directory. A custom output path may be passed as the
 // final Run()/RunAll() argument.
 //
-// Three representations are distinguished deliberately:
-//   (1) LiveGraph-native: one directed physical edge per logical parent relation.
-//       This is a lower-bound/native transactional comparison and does NOT provide
-//       Fabric's reverse-child adjacency contract.
-//   (2) LiveGraph-bidirectional: two physical edges per logical relation, matching
-//       Fabric's parent lookup + reverse-child traversal contract end to end.
-//   (3) SuperNova Fabric: bounded bidirectional DAG relation rows in one relocatable slab.
+// Combined CSV representations:
+//   LiveGraph absolute native lower bound: one current parent per child/axis,
+//       K=1, no reverse adjacency; this is a measured weaker contract, not a
+//       theoretical lower bound on every possible graph implementation.
+//   LiveGraph native DAG: up to K one-way edges per child/axis with ordinal
+//       stored as native edge data; no reverse adjacency.
+//   LiveGraph bidirectional DAG: K parents plus reverse-child traversal.
+//   SuperNova and RowLock: bounded bidirectional DAG contract.
+// RunAllWithNative below runs all backends in five shared CSV files; the older
+// Run()/RunAll() entry points continue to produce the original text report.
 // Test 1 reports full-contract bulk scans and separate storage footprints.
 // Tests 2-3 give all three systems the same nominal measurement interval.
 // Concurrent results are reported primarily as aggregate throughput. A retry-limit
@@ -50,6 +53,8 @@
 #include <system_error>
 #include <sstream>
 #include <fstream>
+#include <functional>
+#include <set>
 
 #if defined(__linux__) || defined(__unix__)
 #include <sys/stat.h>
@@ -612,28 +617,34 @@ private:
 // Tests 2-3 only require one live parent per (child,axis), which is exactly what this
 // adapter represents.
 // -----------------------------------------------------------------------------
-class GenericLiveGraphBackend
+// Single-parent native lower bound and capacity-aware one-way DAG.
+// Both use native child->parent edges. Neither maintains reverse adjacency.
+// The absolute lower bound has one edge per (child,axis); the native DAG
+// stores each parent ordinal in the native edge's one-byte data.
+template <bool FullCapacity>
+class OneWayLiveGraphBackend
 {
 public:
     bool Initialize(std::size_t nodes, std::size_t words, std::uint8_t k,
-                    bool single_payload_region = false)
+                    bool = false)
     {
-        (void)single_payload_region;
-        if (nodes == 0u || nodes > UINT32_MAX || words == 0u || words > UINT32_MAX ||
-            k == 0u || k > ADS::COMPILED_MAX_DIRECT_PARENTS_PER_AXIS)
-            return false;
+        if (!nodes || nodes > UINT32_MAX || !words || words > UINT32_MAX || !k ||
+            k > ADS::COMPILED_MAX_DIRECT_PARENTS_PER_AXIS ||
+            (FullCapacity && nodes > UINT32_MAX / k)) return false;
         try
         {
             Fatal_.store(false, std::memory_order_release);
             Graph_ = std::make_unique<lg::Graph>("", "", 1ull << 40,
                 static_cast<lg::vertex_t>(nodes + 1u));
             auto tx = Graph_->begin_transaction();
-            for (std::size_t node = 0u; node < nodes; ++node)
+            for (std::size_t node = 0; node < nodes; ++node)
                 if (tx.new_vertex() != node) return false;
             tx.commit();
             NodeCount_ = nodes;
             Words_ = words;
             K_ = k;
+            Staging_.assign(words, 0u);
+            StageNode_ = StageWord_ = 0u;
             return true;
         }
         catch (const std::exception&) { Fatal_.store(true); return false; }
@@ -641,15 +652,14 @@ public:
 
     bool PrimePayloadStorage() noexcept
     {
-        if (!Graph_ || Words_ == 0u || Fatal_.load()) return false;
+        if (!Graph_ || !Words_ || Fatal_.load()) return false;
         try
         {
             std::vector<std::uint64_t> zeros(Words_, 0u);
-            const std::string_view payload(
-                reinterpret_cast<const char*>(zeros.data()),
+            const std::string_view payload(reinterpret_cast<const char*>(zeros.data()),
                 zeros.size() * sizeof(std::uint64_t));
             auto tx = Graph_->begin_transaction();
-            for (std::size_t node = 0u; node < NodeCount_; ++node)
+            for (std::size_t node = 0; node < NodeCount_; ++node)
                 tx.put_vertex(static_cast<lg::vertex_t>(node), payload);
             tx.commit();
             return true;
@@ -658,17 +668,72 @@ public:
         catch (const std::exception&) { Fatal_.store(true); return false; }
     }
 
-    bool AddParent(std::size_t parent, std::size_t child, Axis axis,
-                   std::uint32_t tries = DEFAULT_MAX_TRIES) noexcept
+    bool StorePayload(std::size_t node, std::uint32_t word,
+                      std::uint64_t value, bool atomic) noexcept
     {
-        (void)tries;
+        (void)atomic;
+        if (node != StageNode_ || word != StageWord_ || node >= NodeCount_ ||
+            word >= Words_ || Fatal_.load()) return false;
+        Staging_[word] = value;
+        if (++StageWord_ != Words_) return true;
+        try
+        {
+            auto tx = Graph_->begin_transaction();
+            tx.put_vertex(static_cast<lg::vertex_t>(node), std::string_view(
+                reinterpret_cast<const char*>(Staging_.data()),
+                Staging_.size() * sizeof(std::uint64_t)));
+            tx.commit();
+            ++StageNode_;
+            StageWord_ = 0u;
+            return true;
+        }
+        catch (const lg::Transaction::RollbackExcept&) { return false; }
+        catch (const std::exception&) { Fatal_.store(true); return false; }
+    }
+    bool LoadPayload(std::size_t node, std::uint32_t word,
+                     std::uint64_t& value, bool atomic) noexcept
+    {
+        (void)atomic;
+        if (node >= NodeCount_ || word >= Words_ || Fatal_.load()) return false;
+        try
+        {
+            auto tx = Graph_->begin_read_only_transaction();
+            const auto data = tx.get_vertex(static_cast<lg::vertex_t>(node));
+            if (data.size() != Words_ * sizeof(std::uint64_t)) return false;
+            std::memcpy(&value, data.data() +
+                static_cast<std::size_t>(word) * sizeof(value), sizeof(value));
+            return true;
+        }
+        catch (const std::exception&) { Fatal_.store(true); return false; }
+    }
+
+    bool AddParent(std::size_t parent, std::size_t child, Axis axis,
+                   std::uint32_t = DEFAULT_MAX_TRIES) noexcept
+    {
         if (!Legal(parent, child) || Fatal_.load()) return false;
         try
         {
             auto tx = Graph_->begin_transaction();
-            if (!tx.get_edge(child, Label(axis), parent).empty()) return false;
-            const char present = 1;
-            tx.put_edge(child, Label(axis), parent, std::string_view(&present, 1u));
+            const unsigned capacity = FullCapacity ? K_ : 1u;
+            std::array<bool, ADS::COMPILED_MAX_DIRECT_PARENTS_PER_AXIS> used{};
+            auto edges = tx.get_edges(child, Label(axis));
+            for (; edges.valid(); edges.next())
+            {
+                const auto data = edges.edge_data();
+                const unsigned ordinal = data.size() == 1u
+                    ? static_cast<unsigned char>(data[0]) : capacity;
+                const auto existing = static_cast<std::size_t>(edges.dst_id());
+                if (ordinal >= capacity || !Legal(existing, child) || used[ordinal])
+                { Fatal_.store(true); return false; }
+                used[ordinal] = true;
+                if (existing == parent) return false;
+            }
+            unsigned free_ordinal = 0u;
+            while (free_ordinal < capacity && used[free_ordinal]) ++free_ordinal;
+            if (free_ordinal == capacity) return false;
+            const char stored_ordinal = static_cast<char>(free_ordinal);
+            tx.put_edge(child, Label(axis), parent,
+                std::string_view(&stored_ordinal, 1u));
             tx.commit();
             return true;
         }
@@ -678,9 +743,8 @@ public:
 
     bool ReplaceParent(std::size_t old_parent, std::size_t new_parent,
                        std::size_t child, Axis axis,
-                       std::uint32_t tries = DEFAULT_MAX_TRIES) noexcept
+                       std::uint32_t = DEFAULT_MAX_TRIES) noexcept
     {
-        (void)tries;
         if (!Legal(old_parent, child) || !Legal(new_parent, child) ||
             old_parent == new_parent || Fatal_.load()) return false;
         try
@@ -688,10 +752,11 @@ public:
             auto tx = Graph_->begin_transaction();
             const auto old = tx.get_edge(child, Label(axis), old_parent);
             if (old.size() != 1u ||
-                !tx.get_edge(child, Label(axis), new_parent).empty())
-                return false;
+                static_cast<unsigned char>(old[0]) >= (FullCapacity ? K_ : 1u) ||
+                !tx.get_edge(child, Label(axis), new_parent).empty()) return false;
+            const std::string ordinal(old);
             if (!tx.del_edge(child, Label(axis), old_parent)) return false;
-            tx.put_edge(child, Label(axis), new_parent, old);
+            tx.put_edge(child, Label(axis), new_parent, ordinal);
             tx.commit();
             return true;
         }
@@ -700,62 +765,65 @@ public:
     }
 
     ReadResult FindParent(std::size_t child, Axis axis, std::uint8_t ordinal,
-                          std::uint32_t tries = 1u) noexcept
+                          std::uint32_t = 1u) noexcept
     {
-        (void)tries;
-        if (child >= NodeCount_ || ordinal != 0u || Fatal_.load()) return {};
+        if (child >= NodeCount_ || ordinal >= (FullCapacity ? K_ : 1u) ||
+            Fatal_.load()) return {};
         try
         {
             auto tx = Graph_->begin_read_only_transaction();
             auto edges = tx.get_edges(child, Label(axis));
-            if (!edges.valid()) return {};
-            const auto parent = static_cast<std::size_t>(edges.dst_id());
-            if (!Legal(parent, child) || edges.edge_data().size() != 1u)
-            { Fatal_.store(true); return {}; }
-            edges.next();
-            if (edges.valid())
+            std::size_t matching = ReadResult::NO_NODE;
+            for (; edges.valid(); edges.next())
             {
-                // Tests 2-3 intentionally model one current parent per axis.
-                Fatal_.store(true);
-                return {};
+                const auto data = edges.edge_data();
+                const unsigned stored = data.size() == 1u
+                    ? static_cast<unsigned char>(data[0]) : K_;
+                const auto parent = static_cast<std::size_t>(edges.dst_id());
+                if (stored >= (FullCapacity ? K_ : 1u) || !Legal(parent, child) ||
+                    (stored == ordinal && matching != ReadResult::NO_NODE))
+                { Fatal_.store(true); return {}; }
+                if (stored == ordinal) matching = parent;
             }
-            return {parent, Locator(child, axis), ReadOperation::FOUND, true};
+            if (matching == ReadResult::NO_NODE) return {};
+            const std::size_t locator = FullCapacity
+                ? child * static_cast<std::size_t>(K_) + ordinal
+                : child * 2u + (axis == Axis::VERTICAL ? 1u : 0u);
+            return {matching, static_cast<std::uint32_t>(locator), ReadOperation::FOUND, true};
         }
         catch (const std::exception&) { Fatal_.store(true); return {}; }
     }
-
-    ReadResult StableFindParent(std::size_t child, Axis axis,
-                                std::uint8_t ordinal,
+    ReadResult StableFindParent(std::size_t child, Axis axis, std::uint8_t ordinal,
                                 std::uint32_t tries = 1u) noexcept
-    {
-        // Fresh MVCC snapshot per logical read, matching the bidirectional adapter.
-        return FindParent(child, axis, ordinal, tries);
-    }
-
+    { return FindParent(child, axis, ordinal, tries); }
     bool Healthy() const noexcept { return !Fatal_.load(); }
 
 private:
-    static constexpr lg::label_t H_PARENT = 0x0400u;
-    static constexpr lg::label_t V_PARENT = 0x0401u;
-
     static constexpr lg::label_t Label(Axis axis) noexcept
-    { return axis == Axis::HORIZONTAL ? H_PARENT : V_PARENT; }
-
+    { return axis == Axis::HORIZONTAL ? 0x0400u : 0x0401u; }
     bool Legal(std::size_t parent, std::size_t child) const noexcept
     { return parent < child && child < NodeCount_; }
-
-    static std::uint32_t Locator(std::size_t child, Axis axis) noexcept
-    {
-        return static_cast<std::uint32_t>(
-            child * 2u + (axis == Axis::VERTICAL ? 1u : 0u));
-    }
-
     std::unique_ptr<lg::Graph> Graph_{};
-    std::size_t NodeCount_ = 0u;
-    std::size_t Words_ = 0u;
+    std::size_t NodeCount_ = 0u, Words_ = 0u;
     std::uint8_t K_ = 0u;
+    std::vector<std::uint64_t> Staging_{};
+    std::size_t StageNode_ = 0u, StageWord_ = 0u;
     std::atomic<bool> Fatal_{false};
 };
+
+using LiveGraphAbsoluteNativeBackend = OneWayLiveGraphBackend<false>;
+using GenericLiveGraphBackend = OneWayLiveGraphBackend<true>;
+using LiveGraphNativeDAGBackend = GenericLiveGraphBackend;
+
+// Forward-only contract: check the current parent after writers have joined.
+// This does not claim that these adapters support reverse-child traversal.
+template <bool FullCapacity>
+inline bool ReverseContains(OneWayLiveGraphBackend<FullCapacity>& backend,
+    std::size_t parent, std::size_t child, Axis axis, std::size_t)
+{
+    const auto found = backend.FindParent(child, axis, 0u, DEFAULT_MAX_TRIES);
+    return found.ContractValid() && found.IsFound() && found.Node == parent;
+}
 
 namespace ExternalFairness
 {
@@ -801,7 +869,7 @@ bool VerifyReverseIfRequested(
 
     if constexpr (HasReverseTraversal<Backend>)
     {
-        return ReverseContains(backend, parent, child, axis, node_count);
+        return APCDAGTests::BenchmarkCore::ReverseContains(backend, parent, child, axis, node_count);
     }
     else
     {
@@ -2573,3 +2641,163 @@ inline int RunAll(std::size_t lower_node_count = 100u,
                result_path);
 }
 } // namespace LiveGraphVsSuperNova
+
+
+// Combined five-CSV experiment. Include SortledtonVsSuperNova.hpp in the final
+// main.cpp and supply its three backend types as template arguments. The old
+// Run()/RunAll() text-report entry points above remain available independently.
+// Native lower-bound rows are one-way; only bidirectional rows match Fabric's
+// reverse-child contract. Every comparison mode is written to the SAME five
+// CSV files and medians are appended after all whole-suite repetitions.
+namespace APCDAGTests::PaperCSV
+{
+template<class SortledtonAbsolute, class SortledtonNative, class SortledtonBidir>
+int RunAllWithNative(std::size_t lower_node_count = 100u,
+    std::size_t higher_node_count = 10'000u,
+    std::size_t lower_parent_capacity = 4u,
+    std::size_t higher_parent_capacity = 32u,
+    std::size_t usable_thread_count = 18u,
+    std::size_t run_count = 9u,
+    const std::string& filename_prefix = "SuperNova_all_systems")
+{
+    if (!ValidateRunArguments(lower_node_count, higher_node_count,
+        lower_parent_capacity, higher_parent_capacity, usable_thread_count) ||
+        !run_count || filename_prefix.empty() || usable_thread_count > 63u)
+        return 1;
+
+    using Fabric = RuntimeAPCFabricBackend;
+    using RowWrite = RowLockedVectorDAG<std::mutex, false>;
+    using RowRead = RowLockedVectorDAG<std::shared_mutex, true>;
+    using LiveAbsolute = LiveGraphVsSuperNova::LiveGraphAbsoluteNativeBackend;
+    using LiveNative = LiveGraphVsSuperNova::LiveGraphNativeDAGBackend;
+    using LiveBidir = LiveGraphVsSuperNova::LiveGraphBackend;
+    Files files(filename_prefix);
+    if (!files.Good()) return 1;
+    const auto cases = MakeBenchmarkCases(lower_node_count, higher_node_count,
+        static_cast<std::uint8_t>(lower_parent_capacity),
+        static_cast<std::uint8_t>(higher_parent_capacity));
+    const std::size_t sweep = usable_thread_count - 2u;
+    bool all_ok = true;
+
+    auto test1 = [&](BenchmarkCase c, std::size_t rep)
+    {
+        // Single-parent lower bounds cannot represent the K-parent Test 1.
+        auto measure = [&]<class T>(const char* label, const char* contract)
+        { return OneTest1<T>(files.Stream[0], label, contract, c, rep); };
+        std::array<std::function<bool()>, 6u> jobs{{
+            [&] { return measure.template operator()<Fabric>(
+                "SuperNova", "bounded_bidirectional_DAG"); },
+            [&] { return measure.template operator()<RowRead>(
+                "RowLock", "bounded_bidirectional_DAG"); },
+            [&] { return measure.template operator()<LiveNative>(
+                "LiveGraph_native_DAG", "one_way_K_parent_no_reverse"); },
+            [&] { return measure.template operator()<SortledtonNative>(
+                "Sortledton_native_DAG", "one_way_K_parent_no_reverse"); },
+            [&] { return measure.template operator()<LiveBidir>(
+                "LiveGraph_bidirectional_DAG", "bidirectional_K_parent_transaction"); },
+            [&] { return measure.template operator()<SortledtonBidir>(
+                "Sortledton_bidirectional_DAG", "bidirectional_K_parent_transaction"); }
+        }};
+        for (std::size_t i = 0; i < jobs.size(); ++i)
+            all_ok = jobs[(i + rep - 1u) % jobs.size()]() && all_ok;
+    };
+    auto structural = [&](BenchmarkCase c, std::size_t rep,
+        std::size_t count, int test, bool skew)
+    {
+        const bool distributed = test == 2 || test == 4;
+        const char* test_name = TestNames[test];
+        const BenchmarkCase absolute_case{c.NodeCount, 1u};
+        auto measure = [&]<class T>(const char* label, const char* contract,
+                                    BenchmarkCase actual)
+        {
+            return test <= 2
+                ? OneMutation<T>(files.Stream[test], test_name, label, contract,
+                    actual, rep, count, distributed, skew, 1000ms)
+                : OneMixed<T>(files.Stream[test], test_name, label, contract,
+                    actual, rep, count, distributed, skew, 1000ms);
+        };
+        std::array<std::function<bool()>, 8u> jobs{{
+            [&] { return measure.template operator()<Fabric>(
+                "SuperNova", "bounded_bidirectional_DAG", c); },
+            [&] {
+                if (test <= 2) return measure.template operator()<RowWrite>(
+                    "RowLock", "bounded_bidirectional_DAG", c);
+                return measure.template operator()<RowRead>(
+                    "RowLock", "bounded_bidirectional_DAG", c);
+            },
+            [&] { return measure.template operator()<LiveAbsolute>(
+                "LiveGraph_absolute_native_lower_bound",
+                "one_way_single_parent_no_reverse", absolute_case); },
+            [&] { return measure.template operator()<LiveNative>(
+                "LiveGraph_native_DAG", "one_way_K_parent_no_reverse", c); },
+            [&] { return measure.template operator()<LiveBidir>(
+                "LiveGraph_bidirectional_DAG", "bidirectional_K_parent_transaction", c); },
+            [&] { return measure.template operator()<SortledtonAbsolute>(
+                "Sortledton_absolute_native_lower_bound",
+                test <= 2 ? "one_way_single_parent_no_reverse"
+                          : "guarded_one_way_single_parent_no_reverse", absolute_case); },
+            [&] { return measure.template operator()<SortledtonNative>(
+                "Sortledton_native_DAG",
+                test <= 2 ? "one_way_K_parent_no_reverse"
+                          : "guarded_one_way_K_parent_no_reverse", c); },
+            [&] { return measure.template operator()<SortledtonBidir>(
+                "Sortledton_bidirectional_DAG",
+                test <= 2 ? "bidirectional_K_parent_transaction"
+                          : "guarded_bidirectional_K_parent_transaction", c); }
+        }};
+        for (std::size_t i = 0; i < jobs.size(); ++i)
+        {
+            const std::size_t index = (i + rep - 1u) % jobs.size();
+            // K=1 lower-bound rows are independent of the caller's low-K
+            // setting. Run them once per N so their median has run_count rows.
+            if ((index == 2u || index == 5u) &&
+                c.ParentCapacity != higher_parent_capacity) continue;
+            all_ok = jobs[index]() && all_ok;
+        }
+    };
+    for (std::size_t rep = 1u; rep <= run_count; ++rep)
+    {
+        std::cout << "Whole-suite repetition " << rep << '/' << run_count << '\n';
+        std::set<std::pair<std::size_t, std::uint8_t>> seen_cases;
+        for (BenchmarkCase c : cases)
+        {
+            if (!seen_cases.insert({c.NodeCount, c.ParentCapacity}).second) continue;
+            if (c.NodeCount == lower_node_count) test1(c, rep);
+            for (std::size_t count = 1u; count <= sweep; ++count)
+                for (int test = 1; test <= 4; ++test)
+                    for (int distribution = 0;
+                         distribution < ((test == 2 || test == 4) ? 2 : 1);
+                         ++distribution)
+                        structural(c, rep, count, test, distribution == 1);
+        }
+        // Large N runs use only the one-word structural workload (2B/3B).
+        for (std::size_t n : {65'536u, 262'144u, 524'288u, 1'048'576u})
+        {
+            if (n <= lower_node_count || n >= higher_node_count) continue;
+            const BenchmarkCase c{n, static_cast<std::uint8_t>(higher_parent_capacity)};
+            for (std::size_t count = 1u; count <= sweep; ++count)
+                for (bool skew : {false, true})
+                {
+                    structural(c, rep, count, 2, skew);
+                    structural(c, rep, count, 4, skew);
+                }
+        }
+    }
+    for (auto& file : files.Stream)
+    {
+        file.flush();
+        if (!file.good()) all_ok = false;
+        file.close();
+    }
+    for (const char* test : TestNames)
+        all_ok = AppendMedians(filename_prefix + "_" + test + ".csv", run_count) && all_ok;
+    return all_ok ? 0 : 1;
+}
+} // namespace APCDAGTests::PaperCSV
+
+// In a final main.cpp, AFTER including both external headers:
+// return APCDAGTests::PaperCSV::RunAllWithNative<
+//     SortledtonVsSuperNova::SortledtonAbsoluteNativeBackend,
+//     SortledtonVsSuperNova::SortledtonNativeBackend,
+//     SortledtonVsSuperNova::SortledtonBidirBackend>(
+//         10000, 1048576, 4, 32, 18, 9, "results/study");
