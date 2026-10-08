@@ -73,6 +73,7 @@ namespace SortledtonVsSuperNova
 {
 using namespace APCDAGTests;
 using namespace APCDAGTests::BenchmarkCore;
+static constexpr uint8_t COMPILED_MAX_DIRECT_PARENTS_PER_AXIS = 64;
 
 // The repository has no edge labels or vertex properties. H/V and direction are
 // encoded with disjoint vertex ranges; each parent edge stores its ordinal as an
@@ -99,7 +100,7 @@ public:
             !words ||
             words > SORTLEDTON_MAX_PAYLOAD_WORDS ||
             !k ||
-            k > ADS::COMPILED_MAX_DIRECT_PARENTS_PER_AXIS)
+            k > COMPILED_MAX_DIRECT_PARENTS_PER_AXIS)
         {
             return false;
         }

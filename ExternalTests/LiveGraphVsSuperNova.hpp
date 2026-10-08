@@ -64,7 +64,7 @@ namespace LiveGraphVsSuperNova
 {
 using namespace APCDAGTests;
 using namespace APCDAGTests::BenchmarkCore;
-
+static constexpr uint8_t COMPILED_MAX_DIRECT_PARENTS_PER_AXIS = 64;
 class LiveGraphBackend
 {
 public:
@@ -73,7 +73,7 @@ public:
     {
         (void)single_payload_region;
         if (nodes == 0 || nodes > UINT32_MAX || k == 0 ||
-            k > ADS::COMPILED_MAX_DIRECT_PARENTS_PER_AXIS ||
+            k > COMPILED_MAX_DIRECT_PARENTS_PER_AXIS ||
             nodes > UINT32_MAX / k || words == 0 || words > UINT32_MAX)
             return false;
         try
@@ -629,7 +629,7 @@ public:
                     bool = false)
     {
         if (!nodes || nodes > UINT32_MAX || !words || words > UINT32_MAX || !k ||
-            k > ADS::COMPILED_MAX_DIRECT_PARENTS_PER_AXIS ||
+            k > COMPILED_MAX_DIRECT_PARENTS_PER_AXIS ||
             (FullCapacity && nodes > UINT32_MAX / k)) return false;
         try
         {
@@ -715,7 +715,7 @@ public:
         {
             auto tx = Graph_->begin_transaction();
             const unsigned capacity = FullCapacity ? K_ : 1u;
-            std::array<bool, ADS::COMPILED_MAX_DIRECT_PARENTS_PER_AXIS> used{};
+            std::array<bool, COMPILED_MAX_DIRECT_PARENTS_PER_AXIS> used{};
             auto edges = tx.get_edges(child, Label(axis));
             for (; edges.valid(); edges.next())
             {
