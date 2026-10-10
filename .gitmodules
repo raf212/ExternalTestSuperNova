@@ -6,4 +6,5 @@
 	url = https://github.com/raf212/SuperNova
 [submodule "sortledton"]
 	path = sortledton
-	url = https://gitlab.db.in.tum.de/per.fuchs/sortledton.git
+	url = https://github.com/raf212/sortledton.git
+	branch = supernova-modifications
