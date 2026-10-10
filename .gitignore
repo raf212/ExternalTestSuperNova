@@ -18,3 +18,5 @@ Dump
 /LiveGraphVsSuperNova_results.txt
 /results
 /all_systems_benchmark
+build-acpp-linux
+build-acpp-windows
